@@ -1,0 +1,356 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <style>
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }
+
+            html,
+            body {
+                width: 1280px;
+                height: 720px;
+                overflow: hidden;
+                font-family: Inter, "Segoe UI", sans-serif;
+                background: #f5f7fb;
+                color: #111827;
+            }
+
+            .slide {
+                position: relative;
+                width: 1280px;
+                height: 720px;
+                overflow: hidden;
+                background: #f5f7fb;
+            }
+
+            /* ===========================
+           BACKGROUND
+        =========================== */
+
+            .bg {
+                position: absolute;
+                inset: 0;
+            }
+
+            .circle {
+                position: absolute;
+                border-radius: 50%;
+            }
+
+            .c1 {
+                width: 720px;
+                height: 720px;
+                background: #e8f0ff;
+                right: -350px;
+                top: -320px;
+            }
+
+            .c2 {
+                width: 430px;
+                height: 430px;
+                background: #ecfdf5;
+                left: -210px;
+                bottom: -210px;
+            }
+
+            .c3 {
+                width: 180px;
+                height: 180px;
+                background: #dbeafe;
+                right: 120px;
+                bottom: 90px;
+            }
+
+            .c4 {
+                width: 90px;
+                height: 90px;
+                background: #bfdbfe;
+                left: 560px;
+                top: 120px;
+            }
+
+            /* decorative bars */
+
+            .bar {
+                position: absolute;
+                border-radius: 100px;
+            }
+
+            .b1 {
+                width: 180px;
+                height: 14px;
+                background: #2563eb;
+                right: 220px;
+                top: 85px;
+            }
+
+            .b2 {
+                width: 110px;
+                height: 10px;
+                background: #14b8a6;
+                right: 180px;
+                top: 115px;
+            }
+
+            /* ===========================
+           TYPOGRAPHY
+        =========================== */
+
+            .kicker {
+                position: absolute;
+                left: 80px;
+                top: 70px;
+
+                font-size: 18px;
+                font-weight: 700;
+                letter-spacing: 2px;
+                color: #2563eb;
+                text-transform: uppercase;
+            }
+
+            .title {
+                position: absolute;
+
+                left: 80px;
+                top: 120px;
+
+                width: 540px;
+
+                font-size: 72px;
+                line-height: 0.95;
+                letter-spacing: -3px;
+                font-weight: 800;
+            }
+
+            .subtitle {
+                position: absolute;
+
+                left: 80px;
+                top: 400px;
+
+                width: 470px;
+
+                font-size: 22px;
+                line-height: 1.4;
+                color: #64748b;
+            }
+
+            /* ===========================
+           IMAGE
+        =========================== */
+
+            .hero-image {
+                position: absolute;
+
+                right: 70px;
+                top: 70px;
+
+                width: 530px;
+                height: 530px;
+
+                border-radius: 34px;
+
+                overflow: hidden;
+            }
+
+            .hero-image img {
+                width: 100%;
+                height: 100%;
+                object-fit: cover;
+            }
+
+            /* ===========================
+           METRICS
+        =========================== */
+
+            .metrics {
+                position: absolute;
+
+                left: 80px;
+                bottom: 55px;
+
+                display: flex;
+
+                gap: 22px;
+            }
+
+            .metric {
+                width: 150px;
+
+                border-top: 4px solid #2563eb;
+
+                padding-top: 18px;
+            }
+
+            .metric h2 {
+                font-size: 42px;
+
+                line-height: 1;
+
+                font-weight: 800;
+            }
+
+            .metric p {
+                margin-top: 8px;
+
+                color: #64748b;
+
+                line-height: 1.4;
+
+                font-size: 15px;
+            }
+
+            /* ===========================
+           FLOATING SHAPES
+        =========================== */
+
+            .square {
+                position: absolute;
+
+                border-radius: 18px;
+            }
+
+            .s1 {
+                width: 70px;
+                height: 70px;
+
+                background: #2563eb;
+
+                right: 610px;
+
+                top: 170px;
+            }
+
+            .s2 {
+                width: 34px;
+                height: 34px;
+
+                background: #14b8a6;
+
+                right: 560px;
+
+                top: 260px;
+            }
+
+            .s3 {
+                width: 22px;
+                height: 22px;
+
+                background: #2563eb;
+
+                left: 620px;
+
+                bottom: 150px;
+            }
+
+            .line {
+                position: absolute;
+
+                width: 180px;
+                height: 5px;
+
+                background: #2563eb;
+
+                border-radius: 100px;
+
+                left: 560px;
+                bottom: 105px;
+            }
+
+            .dot {
+                position: absolute;
+
+                width: 18px;
+                height: 18px;
+
+                background: #2563eb;
+
+                border-radius: 50%;
+            }
+
+            .d1 {
+                left: 730px;
+                bottom: 98px;
+            }
+
+            .d2 {
+                left: 548px;
+                bottom: 98px;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="slide">
+            <!-- Background -->
+
+            <div class="bg">
+                <div class="circle c1"></div>
+                <div class="circle c2"></div>
+                <div class="circle c3"></div>
+                <div class="circle c4"></div>
+
+                <div class="bar b1"></div>
+                <div class="bar b2"></div>
+
+                <div class="square s1"></div>
+                <div class="square s2"></div>
+                <div class="square s3"></div>
+
+                <div class="line"></div>
+                <div class="dot d1"></div>
+                <div class="dot d2"></div>
+            </div>
+
+            <!-- Left Content -->
+
+            <div class="kicker">AI PRESENTATION</div>
+
+            <div class="title">
+                Build<br />
+                Beautiful<br />
+                Slides<br />
+                from HTML.
+            </div>
+
+            <div class="subtitle">
+                Design rich presentations using familiar HTML and CSS. Render
+                them with Playwright, extract every visual element into a scene
+                graph and generate editable PowerPoint presentations
+                automatically.
+            </div>
+
+            <!-- Image -->
+
+            <div class="hero-image">
+                <img
+                    src="https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=1200&q=80"
+                    alt=""
+                />
+
+            </div>
+
+            <!-- Metrics -->
+
+            <div class="metrics">
+                <div class="metric">
+                    <h2>98%</h2>
+                    <p>Rendering Accuracy</p>
+                </div>
+
+                <div class="metric">
+                    <h2>4×</h2>
+                    <p>Faster Generation</p>
+                </div>
+
+                <div class="metric">
+                    <h2>100%</h2>
+                    <p>Editable Objects</p>
+                </div>
+            </div>
+        </div>
+    </body>
+</html>

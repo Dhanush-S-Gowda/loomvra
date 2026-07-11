@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <style>
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }
+
+            html,
+            body {
+                width: 1280px;
+                height: 720px;
+                overflow: hidden;
+                font-family: Inter, "Segoe UI", Arial, sans-serif;
+                background: #f8fafc;
+                color: #111827;
+            }
+
+            .slide {
+                width: 1280px;
+                height: 720px;
+                position: relative;
+                overflow: hidden;
+                padding: 60px;
+                background: #f8fafc;
+            }
+
+            :root {
+                --primary: #2563eb;
+                --secondary: #0f172a;
+                --accent: #14b8a6;
+                --background: #f8fafc;
+                --surface: #ffffff;
+                --text: #111827;
+                --muted: #6b7280;
+                --border: #e5e7eb;
+            }
+        </style>
+    </head>
+
+    <body>
+        <div class="slide">{{CONTENT}}</div>
+    </body>
+</html>

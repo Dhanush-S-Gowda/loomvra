@@ -1,0 +1,14 @@
+{
+  "name": "nextgenppt",
+  "private": true,
+  "workspaces": [
+    "app",
+    "server"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev --workspace app\" \"npm run dev --workspace server\""
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.3"
+  }
+}
