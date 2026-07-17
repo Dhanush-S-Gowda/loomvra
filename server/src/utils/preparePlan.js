@@ -3,7 +3,9 @@ import PlanningSchema from "../schemas/planning.schema.js"
 import fs from "fs"
 import path from "path"
 
-export default async function preparePlan(userInput, model) {
+export default async function preparePlan(userInput, model, options = {}) {
+    const { stream = false } = options;
+
     const planPath = path.join(import.meta.dirname, "../prompts/planning.md");
     const planContent = fs.readFileSync(planPath, "utf-8");
 
@@ -18,6 +20,7 @@ export default async function preparePlan(userInput, model) {
                 type: "json_schema",
                 jsonSchema: PlanningSchema,
             },
+            stream,
         },
     }, {
         timeoutMs: 120000,

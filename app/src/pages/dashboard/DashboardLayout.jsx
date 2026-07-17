@@ -6,7 +6,7 @@ function DashboardLayout() {
   return (
     <SidebarProvider>
       <Sidebar />
-      <SidebarInset>
+      <SidebarInset className="h-screen overflow-hidden">
         <Outlet />
       </SidebarInset>
     </SidebarProvider>

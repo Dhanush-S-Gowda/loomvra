@@ -3,7 +3,8 @@
   "private": true,
   "workspaces": [
     "app",
-    "server"
+    "server",
+    "shared"
   ],
   "scripts": {
     "dev": "concurrently \"npm run dev --workspace app\" \"npm run dev --workspace server\""

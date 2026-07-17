@@ -48,8 +48,8 @@ function Sidebar() {
 
   return (
     <ShadcnSidebar collapsible="icon">
-      <SidebarHeader className="gap-2 p-3">
-        <div className="flex items-center gap-2 justify-between">
+      <SidebarHeader className="gap-2 p-2">
+        <div className="flex items-center gap-2 px-2 justify-between">
           <span className="truncate text-sm font-semibold tracking-tight group-data-[collapsible=icon]:hidden">
             NextGen PPT
           </span>
@@ -61,7 +61,7 @@ function Sidebar() {
           </SidebarTrigger>
         </div>
         <Link to="/dashboard/">
-        <Button className="w-full gap-2 rounded-lg shadow-none" size="sm">
+        <Button className="w-full gap-2 rounded-md border-2 shadow-none">
           <Plus className="size-4 shrink-0" />
           <span className="group-data-[collapsible=icon]:hidden">New Project</span>
         </Button>
@@ -80,7 +80,7 @@ function Sidebar() {
                 const isActive = location.pathname === projectPath;
 
                 return (
-                  <SidebarMenuItem key={project.id} className="group/menu-item">
+                  <SidebarMenuItem key={project.id} className="group/menu-item my-0.5">
                     <SidebarMenuButton
                       asChild
                       tooltip={project.name}
@@ -150,6 +150,7 @@ function Sidebar() {
           <Heart className="size-4 shrink-0" />
           <span className="group-data-[collapsible=icon]:hidden">Like this project?</span>
         </Button>
+        <Link to='/dashboard/settings'>
         <Button
           variant="ghost"
           className="w-full justify-start gap-2 rounded-lg hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
@@ -158,6 +159,7 @@ function Sidebar() {
           <Settings className="size-4 shrink-0" />
           <span className="group-data-[collapsible=icon]:hidden">Settings</span>
         </Button>
+        </Link>
       </SidebarFooter>
     </ShadcnSidebar>
   );

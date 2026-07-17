@@ -259,27 +259,9 @@ Adapt according to the user's request.
 
 # Design Concepts
 
-The designConcepts field describes the overall visual personality of the presentation.
+The designConcepts field is a single string describing the overall visual personality of the presentation.
 
-These are broad visual ideas that influence every slide.
-
-Examples include:
-
-- Geometric backgrounds
-- Organic shapes
-- Minimalist
-- Premium corporate
-- Editorial style
-- Bold typography
-- Floating cards
-- Abstract gradients
-- Frosted glass
-- Soft shadows
-- Modern startup aesthetic
-- Flat illustrations
-- Futuristic
-- Dark theme
-- Luxury branding
+Describe the broad visual ideas that influence every slide, e.g. minimalist, geometric backgrounds, organic shapes, premium corporate, bold typography, frosted glass, etc.
 
 Choose concepts that complement each other.
 
@@ -306,6 +288,10 @@ Only include persistent presentation elements.
 
 Always specify the position of every persistent element.
 
+The `backgroundType` describes the kind of background (e.g. "Gradient", "Solid", "Pattern").
+The `backgroundDescription` provides a detailed visual description.
+Persistent elements only need `type` and `position` — no description field is required.
+
 ---
 
 # Slide Planning
@@ -316,7 +302,11 @@ Every slide must contain:
 - title
 - objective
 - content
-- design guidelines
+- layout
+- background
+- elementPlacement
+- visualHierarchy
+- stylingNotes
 - image recommendations (if required)
 
 ---
@@ -438,262 +428,191 @@ The design guidelines should be sufficiently detailed for another AI to generate
 
 Return only the structured JSON output.
 
-Example:
+Example (dont stick to the same design):
 
 ```json
 {
   "project": {
-    "title": "Introduction to Artificial Intelligence",
-    "topic": "Artificial Intelligence",
-    "purpose": "Educational Presentation",
-    "audience": "Undergraduate Computer Science Students",
-    "tone": "Professional, Modern, Engaging",
+    "title": "Impact of Fertilizers in Indian Agriculture",
+    "topic": "Fertilizers in Agriculture",
+    "purpose": "Educational and Awareness Presentation",
+    "audience": "Agricultural Students, Policy Makers, Farmers, General Public",
     "language": "English",
-    "slideCount": 8
+    "slideCount": 10
   },
-
   "globalDesign": {
-    "theme": "Modern Technology",
-
-    "colorTheme": {
-      "primary": "#2563EB",
-      "secondary": "#60A5FA",
-      "accent": "#8B5CF6",
-      "background": "#F8FAFC",
-      "text": "#111827"
-    },
-
-    "fontStyle": {
-      "heading": "Times New Roman Bold",
-      "subHeading": "Times New Roman SemiBold",
-      "body": "Times New Roman Regular"
-    },
-
-    "designConcepts": [
-      "Minimalist",
-      "Soft Gradients",
-      "Rounded Cards",
-      "Geometric Background Elements",
-      "Modern Technology Aesthetic"
-    ],
-
-    "overallGuidelines": [
-      "Maintain generous whitespace throughout the presentation.",
-      "Use consistent rounded corners for all cards and containers.",
-      "Keep visual hierarchy strong with large headings.",
-      "Use gradients subtly without overwhelming the content.",
-      "Maintain consistent typography across all slides.",
-      "Avoid clutter by limiting each slide to one primary message."
-    ]
+    "theme": "Agriculture and Sustainability",
+    "primary_color": "#2E7D32",
+    "secondary_color": "#66BB6A",
+    "accent_color": "#F9A825",
+    "background_color": "#F1F8E9",
+    "text_color": "#1B5E20",
+    "heading_font": "Georgia Bold",
+    "subHeading_font": "Georgia SemiBold",
+    "body_font": "Georgia Regular",
+    "designConcepts": "Earthy tones, Organic shapes, Nature-inspired textures, Clean modern layout, Subtle botanical accents",
+    "overallGuidelines": "Maintain a natural and grounded aesthetic throughout. Use earthy greens as the dominant palette with warm accents. Keep slides uncluttered with generous whitespace. Use subtle leaf or soil-textured background elements sparingly. Ensure high contrast for readability. All slides should feel cohesive, professional, and rooted in an agricultural theme."
   },
-
   "masterTemplate": {
-    "background": {
-      "type": "Gradient with geometric decorations",
-      "description": "Use a clean light gradient background with subtle abstract geometric shapes placed around the corners without distracting from the content."
-    },
-
+    "backgroundType": "Light gradient with organic pattern",
+    "backgroundDescription": "Soft gradient from light cream to very pale green. A faint, repeating leaf or soil pattern overlay in extremely low opacity (around 5%) to add subtle texture without distracting.",
     "persistentElements": [
       {
         "type": "Logo",
-        "position": "Top Left",
-        "description": "University logo with consistent sizing."
-      },
-      {
-        "type": "Presentation Title",
-        "position": "Top Right",
-        "description": "Display the presentation title in a subtle manner."
+        "position": "Top Left"
       },
       {
         "type": "Slide Number",
-        "position": "Bottom Right",
-        "description": "Simple slide number using muted text color."
+        "position": "Bottom Right"
+      },
+      {
+        "type": "Subtle Botanical Accent Line",
+        "position": "Bottom Edge (thin decorative line)"
       }
     ]
   },
-
   "slides": [
     {
       "number": 1,
-
-      "title": "Introduction to Artificial Intelligence",
-
-      "objective": "Introduce the topic and create curiosity.",
-
-      "content": "# Artificial Intelligence\n### Making Machines Think\n\n- What is AI?\n- Why AI matters today\n- Applications around us\n- What this presentation covers",
-
-      "designGuidelines": {
-        "layout": "Hero Layout",
-        "background": "Soft gradient with abstract geometric shapes.",
-        "elementPlacement": "Large title on the left with supporting text underneath. Hero image occupies the right side. Plenty of whitespace around both sections.",
-        "visualHierarchy": "The presentation title should dominate the slide followed by the subtitle and supporting bullets.",
-        "stylingNotes": "Keep the slide clean with a premium technology-inspired appearance."
-      },
-
+      "title": "Impact of Fertilizers in Indian Agriculture",
+      "objective": "Introduce the presentation topic and establish its relevance to India.",
+      "content": "# Impact of Fertilizers in Indian Agriculture\n### A Journey from Past to Future\n\n- Understanding fertilizer use in India\n- Historical context\n- Current scenario\n- Future implications",
+      "layout": "Hero Layout",
+      "background": "Warm gradient from deep green to earthy brown with a subtle overlay of agricultural patterns.",
+      "elementPlacement": "Large title positioned centrally-left with a subtitle below. A large, high-impact image of Indian farmland occupies the right half. Minimal text to keep the slide powerful and inviting.",
+      "visualHierarchy": "The main title is the absolute focal point. Subtitle supports it. The image provides emotional context. Bullet points are secondary and subtle.",
+      "stylingNotes": "Premium, cinematic feel. Use strong contrast between text and background. The image should be vibrant and evocative of Indian agriculture.",
       "images": [
         {
-          "purpose": "Hero image",
-          "keyword": "Artificial Intelligence",
+          "purpose": "Hero image depicting Indian agriculture",
+          "keyword": "Indian farmland",
           "orientation": "landscape"
         }
       ]
     },
-
     {
       "number": 2,
-
-      "title": "What is Artificial Intelligence?",
-
-      "objective": "Explain the definition of AI.",
-
-      "content": "## Definition\n\nArtificial Intelligence refers to machines capable of performing tasks that normally require human intelligence.\n\n### Examples\n\n- Learning\n- Reasoning\n- Problem Solving\n- Decision Making",
-
-      "designGuidelines": {
-        "layout": "Two Column",
-        "background": "Minimal background with subtle geometric accents.",
-        "elementPlacement": "Text occupies the left side while a supporting illustration occupies the right side.",
-        "visualHierarchy": "Definition should be the primary focus followed by the example list.",
-        "stylingNotes": "Use modern information cards for the examples."
-      },
-
+      "title": "History of Fertilizers in India",
+      "objective": "Provide historical background on fertilizer use in Indian agriculture.",
+      "content": "## Early Practices (Pre-1960s)\n\n- Traditional organic fertilizers: cow dung, compost, green manure\n- Reliance on natural soil fertility cycles\n- Low crop yields but sustainable practices\n\n## The Green Revolution Era (1960s-1980s)\n\n- Introduction of chemical fertilizers (NPK)\n- High-yielding variety seeds\n- Government subsidies and distribution networks\n- Drastic increase in food grain production",
+      "layout": "Timeline",
+      "background": "Light gradient background with subtle organic shapes representing soil layers.",
+      "elementPlacement": "Title at the top-left. A horizontal timeline divides the slide into two eras. Left side (Early Practices) and right side (Green Revolution Era). Each era has a colored card with bullet points. A connecting line with dots illustrates the progression.",
+      "visualHierarchy": "The timeline itself is the central visual anchor. The two era cards are equally important. Bullet points are supporting details.",
+      "stylingNotes": "Timeline line should be a muted brown or green. Era cards should have a slightly off-white background with a subtle shadow. Each era card can have a small icon (e.g., a leaf for organic, a factory for chemical).",
+      "images": []
+    },
+    {
+      "number": 3,
+      "title": "The Green Revolution: A Double-Edged Sword",
+      "objective": "Explain the transformative but also problematic impact of the Green Revolution.",
+      "content": "## Achievements\n\n- Food self-sufficiency achieved\n- Dramatic yield increases (wheat, rice)\n- Reduced dependence on imports\n\n## Unintended Consequences\n\n- Soil degradation\n- Water pollution (eutrophication)\n- Loss of soil biodiversity\n- Farmer debt cycles",
+      "layout": "Comparison Layout",
+      "background": "Split background: left half soft green, right half muted orange.",
+      "elementPlacement": "Title centered at the top. Left column (Achievements) with a green accent bar. Right column (Unintended Consequences) with an orange accent bar. Both columns have a card with bullet points. A subtle divider line separates them.",
+      "visualHierarchy": "Both columns should have equal visual weight. The title is the primary element. The two columns are secondary and of equal importance.",
+      "stylingNotes": "Use icons at the top of each column (e.g., a rising arrow for achievements, a warning sign for consequences). Maintain consistent spacing. The contrasting background colors reinforce the dual nature of the topic.",
+      "images": []
+    },
+    {
+      "number": 4,
+      "title": "Current Fertilizer Consumption Patterns",
+      "objective": "Show the scale and distribution of fertilizer use in India today.",
+      "content": "## India's Fertilizer Use (2023-24)\n\n- Total consumption: ~60 million tonnes\n- Urea dominates (~30 million tonnes)\n- Imbalanced NPK ratio (10:2.6:1 vs ideal 4:2:1)\n- High usage in Punjab, Haryana, Uttar Pradesh, Andhra Pradesh",
+      "layout": "Data Visualization Layout",
+      "background": "Clean light background with a subtle map outline of India in the background (low opacity).",
+      "elementPlacement": "Title at the top-left. A large bar chart or pie chart showing NPK consumption occupies the center-right. Key statistics are placed in a card on the left side. A small map of India highlights high-usage states.",
+      "visualHierarchy": "The chart is the primary visual element. The key statistics card is secondary. The map is a supporting background detail.",
+      "stylingNotes": "The chart should use the primary green and accent yellow colors. Keep data labels clear and readable. The map outline should be very faint so it doesn't compete with the chart.",
+      "images": []
+    },
+    {
+      "number": 5,
+      "title": "Environmental Impact on Indian Soils",
+      "objective": "Highlight the negative environmental consequences of over-fertilization.",
+      "content": "## Soil Health Crisis\n\n- Soil organic carbon declined in 70% of samples\n- Micronutrient deficiencies (zinc, iron)\n- Increased soil salinity and acidity\n- Groundwater contamination (nitrates)\n\n## Water Bodies Affected\n\n- Eutrophication in lakes and ponds\n- Algal blooms in rivers\n- Dead zones in coastal areas",
+      "layout": "Two Column with Images",
+      "background": "Earthy gradient background with subtle crackled soil texture.",
+      "elementPlacement": "Title centered at the top. Left column has a large image of cracked, degraded soil with bullet points below. Right column has an image of a polluted water body with bullet points below. Both columns are balanced.",
+      "visualHierarchy": "The images are the primary visual anchors, drawing attention to the problems. The bullet points are secondary explanations.",
+      "stylingNotes": "Images should be impactful but not overly graphic. Desaturated tones can convey the seriousness. Use a warm, concerned palette. Cards should have a slight transparency to allow the background texture to show.",
       "images": [
         {
-          "purpose": "Supporting illustration",
-          "keyword": "Machine Learning",
+          "purpose": "Show degraded soil",
+          "keyword": "cracked dry soil",
+          "orientation": "landscape"
+        },
+        {
+          "purpose": "Show polluted water body",
+          "keyword": "algae bloom pond",
+          "orientation": "landscape"
+        }
+      ]
+    },
+    {
+      "number": 6,
+      "title": "Socio-Economic Impact on Farmers",
+      "objective": "Discuss how fertilizer dependency affects farmers' livelihoods.",
+      "content": "## Economic Burden\n\n- Rising input costs\n- Debt and farmer distress\n- Subsidy dependency (₹1.6 lakh crore in 2023-24)\n\n## Health Impacts\n\n- Respiratory issues from handling\n- Waterborne diseases from nitrate contamination\n- Long-term soil infertility\n- Reduced farm profitability",
+      "layout": "Alternating Image Layout",
+      "background": "Soft warm gradient with a subtle texture resembling burlap or cloth.",
+      "elementPlacement": "Large portrait image of an Indian farmer on the left side. Text content on the right side, organized into two distinct sections (Economic Burden and Health Impacts). Each section has a small icon and bullet points.",
+      "visualHierarchy": "The farmer's portrait is the emotional anchor, humanizing the data. The text sections are secondary but equally important for conveying the message.",
+      "stylingNotes": "The image should be respectful and evocative. Use a vignette effect on the image to focus on the farmer's face. Text sections should be in clean cards with subtle separators.",
+      "images": [
+        {
+          "purpose": "Portrait of an Indian farmer",
+          "keyword": "indian farmer portrait",
           "orientation": "portrait"
         }
       ]
     },
-
-    {
-      "number": 3,
-
-      "title": "Types of AI",
-
-      "objective": "Introduce the major categories of AI.",
-
-      "content": "## Categories\n\n- Narrow AI\n- General AI\n- Super AI\n\nEach category represents increasing levels of machine capability.",
-
-      "designGuidelines": {
-        "layout": "Three Column Cards",
-        "background": "Light gradient background.",
-        "elementPlacement": "Three equally sized cards placed horizontally with the title centered above.",
-        "visualHierarchy": "Each card should receive equal visual importance.",
-        "stylingNotes": "Cards should use subtle shadows and rounded corners."
-      },
-
-      "images": []
-    },
-
-    {
-      "number": 4,
-
-      "title": "AI in Everyday Life",
-
-      "objective": "Show practical AI applications.",
-
-      "content": "## Common Applications\n\n- Voice Assistants\n- Recommendation Systems\n- Navigation\n- Smart Cameras\n- Language Translation",
-
-      "designGuidelines": {
-        "layout": "Alternating Image Layout",
-        "background": "Simple background with minimal decorative elements.",
-        "elementPlacement": "Large image on the left with application cards stacked vertically on the right.",
-        "visualHierarchy": "The image attracts attention while the application cards provide supporting information.",
-        "stylingNotes": "Maintain strong alignment and consistent spacing."
-      },
-
-      "images": [
-        {
-          "purpose": "Illustrate AI applications",
-          "keyword": "Smart Technology",
-          "orientation": "landscape"
-        }
-      ]
-    },
-
-    {
-      "number": 5,
-
-      "title": "Benefits of AI",
-
-      "objective": "Highlight the advantages of AI.",
-
-      "content": "## Benefits\n\n- Increased Productivity\n- Automation\n- Better Decision Making\n- Improved Accuracy\n- Faster Processing",
-
-      "designGuidelines": {
-        "layout": "Feature Grid",
-        "background": "Very light geometric background.",
-        "elementPlacement": "Title at the top with feature cards arranged in a balanced grid below.",
-        "visualHierarchy": "Each benefit should be equally prominent.",
-        "stylingNotes": "Use colorful accent highlights to distinguish each feature card."
-      },
-
-      "images": []
-    },
-
-    {
-      "number": 6,
-
-      "title": "Challenges of AI",
-
-      "objective": "Discuss limitations and ethical concerns.",
-
-      "content": "## Challenges\n\n- Privacy\n- Bias\n- Security\n- Transparency\n- Job Displacement",
-
-      "designGuidelines": {
-        "layout": "Vertical Information Cards",
-        "background": "Clean light background.",
-        "elementPlacement": "Five stacked information cards centered on the slide.",
-        "visualHierarchy": "The title is the primary focus followed by the vertically arranged cards.",
-        "stylingNotes": "Maintain generous spacing between the cards."
-      },
-
-      "images": []
-    },
-
     {
       "number": 7,
-
-      "title": "Future of AI",
-
-      "objective": "Provide a forward-looking perspective.",
-
-      "content": "## Future Trends\n\n- Generative AI\n- Robotics\n- Healthcare\n- Education\n- Autonomous Systems",
-
-      "designGuidelines": {
-        "layout": "Image with Overlay Content",
-        "background": "Modern gradient background.",
-        "elementPlacement": "A large futuristic background image occupies most of the slide with a semi-transparent content card placed on the left.",
-        "visualHierarchy": "The futuristic image establishes context while the content card remains highly readable.",
-        "stylingNotes": "Create a premium futuristic aesthetic using soft gradients."
-      },
-
-      "images": [
-        {
-          "purpose": "Future vision",
-          "keyword": "Future Technology",
-          "orientation": "landscape"
-        }
-      ]
+      "title": "Government Policies & Initiatives",
+      "objective": "Outline current government measures to address fertilizer issues.",
+      "content": "## Key Initiatives\n\n- **Neem Coating of Urea** (2015): Slow release, reduced diversion\n- **Soil Health Card Scheme** (2015): Soil testing for balanced fertilization\n- **PM-Kisan Samman Nidhi**: Direct income support\n- **Nutrient Based Subsidy (NBS)**: Encourages balanced NPK use\n- **Promotion of Organic Farming**: Paramparagat Krishi Vikas Yojana (PKVY)",
+      "layout": "Vertical Information Cards",
+      "background": "Clean light background with a faint pattern of government documents.",
+      "elementPlacement": "Title at the top. Five vertically stacked cards, each representing one initiative. Each card has a small icon on the left, the initiative name in bold, and a brief description. Cards are evenly spaced.",
+      "visualHierarchy": "The title is primary. The initiative cards are secondary, each with equal visual importance. The icons help differentiate them quickly.",
+      "stylingNotes": "Use government-inspired colors (blue, white, saffron) sparingly. Cards should have a light shadow and rounded corners. The icons should be simple and recognizable.",
+      "images": []
     },
-
     {
       "number": 8,
-
-      "title": "Key Takeaways",
-
-      "objective": "Summarize the presentation.",
-
-      "content": "## Summary\n\n- AI is transforming industries.\n- AI improves efficiency and decision making.\n- Ethical development is important.\n- AI will continue shaping the future.",
-
-      "designGuidelines": {
-        "layout": "Centered Summary",
-        "background": "Minimal gradient background.",
-        "elementPlacement": "Centered content card with large title and concise takeaway points beneath.",
-        "visualHierarchy": "The title should immediately capture attention followed by the key takeaway list.",
-        "stylingNotes": "Keep the final slide clean, balanced and memorable."
-      },
-
+      "title": "Sustainable Alternatives & Solutions",
+      "objective": "Present eco-friendly alternatives to chemical fertilizers.",
+      "content": "## Promising Alternatives\n\n- **Organic Fertilizers**: Compost, vermicompost, biochar\n- **Biofertilizers**: Rhizobium, Azotobacter, Mycorrhiza\n- **Precision Farming**: Site-specific nutrient management\n- **Crop Rotation & Intercropping**: Natural nitrogen fixation\n- **Integrated Nutrient Management (INM)**: Combining organic & inorganic",
+      "layout": "Grid Layout",
+      "background": "Fresh green gradient with subtle leaf patterns.",
+      "elementPlacement": "Title centered at the top. A 2x3 grid of cards (one card for each alternative). Each card has a large icon or illustration, the alternative name in bold, and a 1-line description. The grid is evenly spaced and centered.",
+      "visualHierarchy": "The title is primary. Each card in the grid is equally weighted, promoting the idea of multiple viable alternatives. Icons make the slide visually engaging.",
+      "stylingNotes": "Use bright, optimistic colors (greens, yellows). Cards should have a white background with a subtle green border. Icons should be modern and clean.",
+      "images": []
+    },
+    {
+      "number": 9,
+      "title": "Future Implications & Recommendations",
+      "objective": "Discuss the long-term outlook and provide actionable recommendations.",
+      "content": "## The Path Forward\n\n- Reduce subsidy distortion favoring urea\n- Scale up soil testing and awareness\n- Invest in agri-tech and precision agriculture\n- Promote farmer cooperatives for bulk organic inputs\n- Shift towards ** regenerative agriculture**\n\n## Vision 2047\n\n- 50% reduction in chemical fertilizer use\n- 100% soil health coverage\n- Net-zero emissions from agriculture\n- Doubled farmer income",
+      "layout": "Process Flow",
+      "background": "Clean light background with a forward-moving arrow or path illustration (low opacity).",
+      "elementPlacement": "Title at the top-left. A horizontal process flow shows the steps from current state (left) to future vision (right). Key recommendations are placed along the path as cards. The 'Vision 2047' section is highlighted at the end with a distinct card.",
+      "visualHierarchy": "The process flow is the central visual narrative. The recommendations are intermediate steps. The 'Vision 2047' card is the ultimate destination and should be visually prominent.",
+      "stylingNotes": "Use a gradient arrow or path line connecting the steps. The 'Vision 2047' card should have a star or target icon and a slightly different color (accent yellow or gold) to signify the goal. Keep the flow direction clear.",
+      "images": []
+    },
+    {
+      "number": 10,
+      "title": "Key Takeaways & Call to Action",
+      "objective": "Summarize the presentation and inspire action.",
+      "content": "## Summary\n\n- Fertilizers fueled the Green Revolution but created environmental & social costs.\n- Current consumption is imbalanced and unsustainable.\n- Government policies are evolving but need greater impact.\n- Sustainable alternatives exist and must be scaled.\n- The future of Indian agriculture depends on balanced, regenerative practices.\n\n## Call to Action\n\n- **Farmers**: Adopt soil testing and INM\n- **Policymakers**: Reform subsidies and promote research\n- **Consumers**: Support organic and sustainably grown food\n- **All**: Advocate for a greener, fairer agricultural future",
+      "layout": "Centered Summary with Call to Action",
+      "background": "Warm, optimistic gradient (green to golden yellow) with a subtle rising sun or sprout pattern.",
+      "elementPlacement": "Centered layout. A large summary card occupies the upper half with concise bullet points. Below it, a distinct 'Call to Action' section with four audience-specific action items, each with a small icon. Strong, clear visual separation between summary and CTA.",
+      "visualHierarchy": "The summary bullet points are the primary takeaway. The Call to Action is the final, actionable message. The title should be large and commanding.",
+      "stylingNotes": "Premium, inspiring final slide. Use a prominent accent color for the CTA section (e.g., a button-like background). Ensure all text is highly readable. The overall feel should be hopeful and empowering.",
       "images": []
     }
   ]

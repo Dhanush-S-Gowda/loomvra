@@ -25,7 +25,6 @@ const PlanningSchema = {
           "topic",
           "purpose",
           "audience",
-          "tone",
           "language",
           "slideCount"
         ],
@@ -47,10 +46,6 @@ const PlanningSchema = {
             type: "string"
           },
 
-          tone: {
-            type: "string"
-          },
-
           language: {
             type: "string"
           },
@@ -69,8 +64,14 @@ const PlanningSchema = {
 
         required: [
           "theme",
-          "colorTheme",
-          "fontStyle",
+          "primary_color",
+          "secondary_color",
+          "accent_color",
+          "background_color",
+          "text_color",
+          "heading_font",
+          "subHeading_font",
+          "body_font",
           "designConcepts",
           "overallGuidelines"
         ],
@@ -80,82 +81,46 @@ const PlanningSchema = {
             type: "string"
           },
 
-          colorTheme: {
-            type: "object",
-
-            additionalProperties: false,
-
-            required: [
-              "primary",
-              "secondary",
-              "accent",
-              "background",
-              "text"
-            ],
-
-            properties: {
-              primary: {
-                type: "string"
-              },
-
-              secondary: {
-                type: "string"
-              },
-
-              accent: {
-                type: "string"
-              },
-
-              background: {
-                type: "string"
-              },
-
-              text: {
-                type: "string"
-              }
-            }
+          // Colors (flattened from former colorTheme object)
+          primary_color: {
+            type: "string"
           },
 
-          fontStyle: {
-            type: "object",
+          secondary_color: {
+            type: "string"
+          },
 
-            additionalProperties: false,
+          accent_color: {
+            type: "string"
+          },
 
-            required: [
-              "heading",
-              "subHeading",
-              "body"
-            ],
+          background_color: {
+            type: "string"
+          },
 
-            properties: {
-              heading: {
-                type: "string"
-              },
+          text_color: {
+            type: "string"
+          },
 
-              subHeading: {
-                type: "string"
-              },
+          // Fonts (flattened from former fontStyle object)
+          heading_font: {
+            type: "string"
+          },
 
-              body: {
-                type: "string"
-              }
-            }
+          subHeading_font: {
+            type: "string"
+          },
+
+          body_font: {
+            type: "string"
           },
 
           designConcepts: {
-            type: "array",
-
-            items: {
-              type: "string"
-            }
+            type: "string"
           },
 
           overallGuidelines: {
-            type: "array",
-
-            items: {
-              type: "string"
-            }
+            type: "string"
           }
         }
       },
@@ -166,30 +131,18 @@ const PlanningSchema = {
         additionalProperties: false,
 
         required: [
-          "background",
+          "backgroundType",
+          "backgroundDescription",
           "persistentElements"
         ],
 
         properties: {
-          background: {
-            type: "object",
+          backgroundType: {
+            type: "string"
+          },
 
-            additionalProperties: false,
-
-            required: [
-              "type",
-              "description"
-            ],
-
-            properties: {
-              type: {
-                type: "string"
-              },
-
-              description: {
-                type: "string"
-              }
-            }
+          backgroundDescription: {
+            type: "string"
           },
 
           persistentElements: {
@@ -202,8 +155,7 @@ const PlanningSchema = {
 
               required: [
                 "type",
-                "position",
-                "description"
+                "position"
               ],
 
               properties: {
@@ -212,10 +164,6 @@ const PlanningSchema = {
                 },
 
                 position: {
-                  type: "string"
-                },
-
-                description: {
                   type: "string"
                 }
               }
@@ -239,7 +187,11 @@ const PlanningSchema = {
             "title",
             "objective",
             "content",
-            "designGuidelines",
+            "layout",
+            "background",
+            "elementPlacement",
+            "visualHierarchy",
+            "stylingNotes",
             "images"
           ],
 
@@ -262,40 +214,25 @@ const PlanningSchema = {
               description: "Presentation-ready Markdown."
             },
 
-            designGuidelines: {
-              type: "object",
+            // Design guidelines flattened directly into slide
+            layout: {
+              type: "string"
+            },
 
-              additionalProperties: false,
+            background: {
+              type: "string"
+            },
 
-              required: [
-                "layout",
-                "background",
-                "elementPlacement",
-                "visualHierarchy",
-                "stylingNotes"
-              ],
+            elementPlacement: {
+              type: "string"
+            },
 
-              properties: {
-                layout: {
-                  type: "string"
-                },
+            visualHierarchy: {
+              type: "string"
+            },
 
-                background: {
-                  type: "string"
-                },
-
-                elementPlacement: {
-                  type: "string"
-                },
-
-                visualHierarchy: {
-                  type: "string"
-                },
-
-                stylingNotes: {
-                  type: "string"
-                }
-              }
+            stylingNotes: {
+              type: "string"
             },
 
             images: {

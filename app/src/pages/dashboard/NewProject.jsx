@@ -2,7 +2,12 @@ import React, { useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
-import { ArrowRight } from 'lucide-react';
+import { ArrowRight, CircleQuestionMark } from 'lucide-react';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 
 function NewProject() {
   const [projectName, setProjectName] = useState('');
@@ -79,9 +84,19 @@ function NewProject() {
             <div className="space-y-3">
               <label
                 htmlFor="project-name"
-                className="block text-sm font-medium text-muted-foreground uppercase tracking-wider"
+                className="flex items-center text-sm font-medium text-muted-foreground uppercase tracking-wider"
               >
+                <span>
                 What do you want to call your project?
+                </span>
+                <Tooltip>
+                  <TooltipTrigger className="ml-2">
+                    <CircleQuestionMark className="w-3.5 h-3.5" />
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>This name will be used to identify your project only. PPT title will be generated automatically.</p>
+                  </TooltipContent>
+                </Tooltip>
               </label>
               <Input
                 id="project-name"
@@ -89,7 +104,7 @@ function NewProject() {
                 value={projectName}
                 onChange={(e) => setProjectName(e.target.value)}
                 placeholder="Enter your project name"
-                className="h-14 text-lg bg-background/70 backdrop-blur-md border-border/60 focus:border-primary/50 focus:ring-primary/20 transition-all"
+                className="h-14 text-lg bg-background/30 backdrop-blur-md border-border/60 focus:border-primary/50 focus:ring-primary/20 transition-all"
               />
             </div>
 
@@ -97,16 +112,26 @@ function NewProject() {
             <div className="space-y-3">
               <label
                 htmlFor="description"
-                className="block text-sm font-medium text-muted-foreground uppercase tracking-wider"
+                className="flex items-center text-sm font-medium text-muted-foreground uppercase tracking-wider"
               >
+                <span>
                 What do you wanna build?
+                </span>
+                <Tooltip>
+                  <TooltipTrigger className="ml-2">
+                    <CircleQuestionMark className="w-3.5 h-3.5" />
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Give as much context as possible to help the AI generate a PPT title.<br />You can specify number of slides and key points to include in the PPT.</p>
+                  </TooltipContent>
+                </Tooltip>
               </label>
               <Textarea
                 id="description"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Describe your project idea..."
-                className="min-h-[200px] text-base bg-background/70 backdrop-blur-md border-border/60 focus:border-primary/50 focus:ring-primary/20 resize-y overflow-auto transition-all"
+                className="min-h-[200px] text-base bg-background/30 backdrop-blur-md border-border/60 focus:border-primary/50 focus:ring-primary/20 resize-y overflow-auto transition-all"
               />
             </div>
 
@@ -114,7 +139,7 @@ function NewProject() {
             <div className="flex justify-center pt-4">
               <Button
                 size="lg"
-                className="group gap-3 px-8 py-6 text-lg font-medium bg-foreground text-background hover:bg-foreground/90 hover:scale-105 hover:shadow-lg hover:shadow-foreground/20 transition-all duration-300 ease-out rounded-xl"
+                className="group gap-3 px-8 py-6 text-lg font-medium hover:scale-105 hover:shadow-lg transition-all duration-300 ease-out rounded-xl"
               >
                 Start crafting
                 <ArrowRight className="size-5 transition-transform duration-300 group-hover:translate-x-1" />
