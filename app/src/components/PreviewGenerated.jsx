@@ -1,6 +1,5 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, forwardRef } from 'react';
 import { Button } from '@/components/ui/button';
-import { Separator } from '@/components/ui/separator';
 import {
   Tooltip,
   TooltipContent,
@@ -14,15 +13,24 @@ import {
   ChevronLeft,
   ChevronRight,
   X,
+  Minus,
+  Plus,
 } from 'lucide-react';
+import { AIChatPanel } from './AIChatPanel';
 
 const SLIDE_WIDTH = 1280;
 const SLIDE_HEIGHT = 720;
 
-function ScaledSlide({ html, className, interactive = true, fit = 'width' }) {
+function ScaledSlide({
+  html,
+  className,
+  interactive = true,
+  fit = 'width',
+  scale: controlledScale,
+}) {
   const wrapperRef = useRef(null);
   const iframeRef = useRef(null);
-  const [scale, setScale] = useState(1);
+  const [autoScale, setAutoScale] = useState(1);
 
   useEffect(() => {
     if (!iframeRef.current || !html) return;
@@ -34,26 +42,35 @@ function ScaledSlide({ html, className, interactive = true, fit = 'width' }) {
   }, [html]);
 
   useEffect(() => {
-    if (!wrapperRef.current) return;
+    if (controlledScale !== undefined || !wrapperRef.current) return;
     const update = () => {
       const rect = wrapperRef.current.getBoundingClientRect();
       const scaleW = rect.width / SLIDE_WIDTH;
       const scaleH = rect.height / SLIDE_HEIGHT;
-      setScale(fit === 'contain' ? Math.min(scaleW, scaleH) : scaleW);
+      setAutoScale(fit === 'contain' ? Math.min(scaleW, scaleH) : scaleW);
     };
     update();
     const ro = new ResizeObserver(update);
     ro.observe(wrapperRef.current);
     return () => ro.disconnect();
-  }, [fit]);
+  }, [fit, controlledScale]);
 
+  const scale = controlledScale !== undefined ? controlledScale : autoScale;
   const isContain = fit === 'contain';
+  const isControlled = controlledScale !== undefined;
 
   return (
     <div
       ref={wrapperRef}
-      className={`relative overflow-hidden ${className}`}
-      style={isContain ? undefined : { aspectRatio: `${SLIDE_WIDTH}/${SLIDE_HEIGHT}` }}
+      className={`relative ${isControlled ? '' : 'overflow-hidden'} ${className}`}
+      style={{
+        ...(!isContain && !isControlled
+          ? { aspectRatio: `${SLIDE_WIDTH}/${SLIDE_HEIGHT}` }
+          : {}),
+        ...(isControlled
+          ? { width: SLIDE_WIDTH * scale, height: SLIDE_HEIGHT * scale }
+          : {}),
+      }}
     >
       <iframe
         ref={iframeRef}
@@ -62,12 +79,13 @@ function ScaledSlide({ html, className, interactive = true, fit = 'width' }) {
         style={{
           width: SLIDE_WIDTH,
           height: SLIDE_HEIGHT,
-          transform: isContain
-            ? `translate(-50%, -50%) scale(${scale})`
-            : `scale(${scale})`,
-          transformOrigin: isContain ? 'center center' : 'top left',
-          left: isContain ? '50%' : '0',
-          top: isContain ? '50%' : '0',
+          transform:
+            isContain && !isControlled
+              ? `translate(-50%, -50%) scale(${scale})`
+              : `scale(${scale})`,
+          transformOrigin: isContain && !isControlled ? 'center center' : 'top left',
+          left: isContain && !isControlled ? '50%' : '0',
+          top: isContain && !isControlled ? '50%' : '0',
         }}
         sandbox="allow-same-origin"
       />
@@ -75,9 +93,13 @@ function ScaledSlide({ html, className, interactive = true, fit = 'width' }) {
   );
 }
 
-function SlideThumbnail({ slide, index, isActive, onClick }) {
+const SlideThumbnail = forwardRef(function SlideThumbnail(
+  { slide, index, isActive, onClick, className },
+  ref
+) {
   return (
     <div
+      ref={ref}
       onClick={onClick}
       role="button"
       tabIndex={0}
@@ -87,11 +109,11 @@ function SlideThumbnail({ slide, index, isActive, onClick }) {
           onClick();
         }
       }}
-      className={`group relative w-full rounded-lg border-2 transition-all overflow-hidden bg-white select-none cursor-pointer ${
+      className={`group relative rounded-lg border-2 transition-all overflow-hidden bg-white select-none cursor-pointer shrink-0 ${
         isActive
           ? 'border-primary ring-1 ring-primary'
           : 'border-transparent hover:border-muted-foreground/30'
-      }`}
+      } ${className || 'w-full'}`}
     >
       <ScaledSlide html={slide?.content} className="w-full" interactive={false} />
       <div className="absolute bottom-1 left-1/2 -translate-x-1/2 text-[10px] font-medium text-muted-foreground bg-background/80 px-1.5 rounded select-none">
@@ -99,13 +121,61 @@ function SlideThumbnail({ slide, index, isActive, onClick }) {
       </div>
     </div>
   );
-}
+});
 
-function SlideViewer({ slide }) {
+function SlideViewer({ slide, zoom, onZoomIn, onZoomOut, className, style }) {
+  const containerRef = useRef(null);
+  const [baseScale, setBaseScale] = useState(1);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const update = () => {
+      const rect = containerRef.current.getBoundingClientRect();
+      const pad = 48; // p-6 = 24px * 2
+      const scaleW = (rect.width - pad) / SLIDE_WIDTH;
+      const scaleH = (rect.height - pad) / SLIDE_HEIGHT;
+      setBaseScale(Math.min(scaleW, scaleH));
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(containerRef.current);
+    return () => ro.disconnect();
+  }, []);
+
+  const finalScale = baseScale * zoom;
+
   return (
-    <div className="flex items-center justify-center bg-muted/30 p-6 overflow-hidden">
-      <div className="w-full max-w-5xl h-full flex items-center justify-center">
-        <ScaledSlide html={slide?.content} className="w-full h-full" fit="contain" />
+    <div className={`relative flex-1 overflow-hidden ${className || ''}`} style={style}>
+      <div ref={containerRef} className="absolute inset-0 overflow-auto p-6">
+        <div className="flex min-w-full min-h-full">
+          <ScaledSlide
+            html={slide?.content}
+            className="shrink-0 m-auto"
+            fit="contain"
+            scale={finalScale}
+          />
+        </div>
+      </div>
+
+      {/* Zoom controls */}
+      <div className="absolute bottom-4 right-4 flex items-center bg-background/90 backdrop-blur border rounded-lg shadow-sm overflow-hidden z-10">
+        <button
+          onClick={onZoomOut}
+          className="px-3 py-2 hover:bg-muted text-sm font-medium flex items-center justify-center"
+          aria-label="Zoom out"
+        >
+          <Minus className="w-4 h-4" />
+        </button>
+        <div className="px-3 py-2 text-sm font-medium border-x min-w-[3rem] text-center tabular-nums">
+          {Math.round(zoom * 100)}
+        </div>
+        <button
+          onClick={onZoomIn}
+          className="px-3 py-2 hover:bg-muted text-sm font-medium flex items-center justify-center"
+          aria-label="Zoom in"
+        >
+          <Plus className="w-4 h-4" />
+        </button>
       </div>
     </div>
   );
@@ -229,28 +299,53 @@ function PresentationMode({ slides, startIndex, onClose }) {
 function PreviewGenerated({ data }) {
   const [activeIndex, setActiveIndex] = useState(0);
   const [presenting, setPresenting] = useState(false);
+  const chatOpen = true;
+  const [zoom, setZoom] = useState(1);
   const slides = data?.slides || [];
   const projectTitle = data?.project?.title || 'Untitled Project';
+  const activeThumbRef = useRef(null);
 
   const activeSlide = slides[activeIndex];
 
+  // Keep active thumbnail visible
+  useEffect(() => {
+    activeThumbRef.current?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+  }, [activeIndex]);
+
+  // Arrow key navigation outside presentation mode
+  useEffect(() => {
+    function handleKeyDown(e) {
+      if (presenting) return;
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        setActiveIndex((i) => Math.max(0, i - 1));
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        setActiveIndex((i) => Math.min(slides.length - 1, i + 1));
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [slides.length, presenting]);
+
+  const handleZoomIn = () => setZoom((z) => Math.min(z + 0.25, 3));
+  const handleZoomOut = () => setZoom((z) => Math.max(z - 0.25, 0.25));
+
   return (
     <TooltipProvider delayDuration={200}>
-      <div className="grid grid-cols-[16rem_1fr] grid-rows-[auto_1fr] h-full bg-background">
+      <div
+        className="grid h-full bg-background grid-rows-[auto_1fr_auto] grid-cols-[1fr_24rem]"
+      >
         {/* Top bar */}
-        <div className="col-span-2 flex items-center justify-between px-6 py-3 border-b bg-background/95 backdrop-blur">
+        <div className="col-span-full flex items-center justify-between px-6 py-3 border-b bg-background/95 backdrop-blur">
           <div className="flex items-center gap-3">
             <Monitor className="w-5 h-5 text-muted-foreground" />
             <h1 className="text-lg font-semibold tracking-tight">{projectTitle}</h1>
           </div>
           <div className="flex items-center gap-2">
-            <Tooltip>
+              <Tooltip>
               <TooltipTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setPresenting(true)}
-                >
+                <Button variant="outline" size="sm" onClick={() => setPresenting(true)}>
                   <Presentation className="w-4 h-4 mr-2" />
                   Present
                 </Button>
@@ -264,29 +359,53 @@ function PreviewGenerated({ data }) {
           </div>
         </div>
 
-        {/* Left thumbnail panel */}
-        <div className="flex flex-col border-r bg-muted/20 overflow-hidden">
-          <div className="px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider shrink-0">
+        {/* Main slide viewer */}
+        <SlideViewer
+          slide={activeSlide}
+          zoom={zoom}
+          onZoomIn={handleZoomIn}
+          onZoomOut={handleZoomOut}
+          style={{ background: 'var(--preview-bg)' }}
+        />
+
+        {/* AI Chat Panel — right sidebar */}
+        <div className="col-start-2 row-span-2 border-l bg-background overflow-hidden flex flex-col">
+          <AIChatPanel
+            models={[
+              { id: 'gpt-4o', name: 'GPT-4o' },
+              { id: 'gpt-4o-mini', name: 'GPT-4o Mini' },
+              { id: 'claude-3-5-sonnet', name: 'Claude 3.5 Sonnet' },
+              { id: 'claude-3-haiku', name: 'Claude 3 Haiku' },
+              { id: 'gemini-1-5-pro', name: 'Gemini 1.5 Pro' },
+            ]}
+            slideCount={slides.length}
+          />
+        </div>
+
+        {/* Bottom thumbnail panel */}
+        <div
+          className="flex items-center gap-4 px-4 py-2 border-t overflow-hidden"
+          style={{ background: 'var(--preview-thumb-bg)' }}
+        >
+          <div className="shrink-0 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
             Slides
           </div>
-          <Separator className="shrink-0" />
-          <div className="flex-1 overflow-y-auto min-h-0 px-3 py-3">
-            <div className="space-y-3">
+          <div className="flex-1 overflow-x-auto min-w-0">
+            <div className="flex gap-3 py-1">
               {slides.map((slide, idx) => (
                 <SlideThumbnail
                   key={slide.index ?? idx}
+                  ref={idx === activeIndex ? activeThumbRef : null}
                   slide={slide}
                   index={idx}
                   isActive={idx === activeIndex}
                   onClick={() => setActiveIndex(idx)}
+                  className="w-36"
                 />
               ))}
             </div>
           </div>
         </div>
-
-        {/* Main slide viewer */}
-        <SlideViewer slide={activeSlide} />
 
         {/* Presentation mode */}
         {presenting && (

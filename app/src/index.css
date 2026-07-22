@@ -109,6 +109,10 @@
     --sidebar-border: oklch(0.922 0 0);
     --sidebar-ring: hsl(25 95% 53% / 0.4);
 
+    /* Preview canvas backgrounds */
+    --preview-bg: hsl(25 40% 96%);
+    --preview-thumb-bg: hsl(25 35% 93%);
+
     /* Gradient blob colors */
     --blob-coral: hsl(25 95% 53%);
     --blob-purple: hsl(265 89% 78%);
@@ -148,6 +152,10 @@
     --sidebar-accent-foreground: hsl(25 95% 60%);
     --sidebar-border: oklch(1 0 0 / 10%);
     --sidebar-ring: hsl(25 80% 45% / 0.5);
+
+    /* Preview canvas backgrounds - dark mode */
+    --preview-bg: hsl(25 10% 15%);
+    --preview-thumb-bg: hsl(25 10% 12%);
 
     /* Gradient blob colors - darker/muted for dark mode */
     --blob-coral: hsl(25 80% 45%);

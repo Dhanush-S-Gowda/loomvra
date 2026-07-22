@@ -39,7 +39,9 @@ import {
   Check,
   X,
   ArrowRight,
+  Plus,
 } from 'lucide-react';
+import ImagePickerDialog from '@/components/ImagePickerDialog';
 
 function EditableField({ label, value, isEditing, onChange, multiline = false, type = 'text' }) {
   if (!isEditing) {
@@ -123,6 +125,8 @@ function DesignPlan({ data }) {
   const [slideToDelete, setSlideToDelete] = useState(null);
   const [editingSection, setEditingSection] = useState(null);
   const [imageDialog, setImageDialog] = useState(null);
+  const [imagePickerOpen, setImagePickerOpen] = useState(false);
+  const [imagePickerTarget, setImagePickerTarget] = useState(null); // { slideNumber, imgIndex } or { slideNumber } for new
 
   const startEdit = (section) => {
     setEditingSection(section);
@@ -175,14 +179,6 @@ function DesignPlan({ data }) {
     );
   }, []);
 
-  const addSlideImage = useCallback((slideNumber) => {
-    setSlides((prev) =>
-      prev.map((s) =>
-        s.number === slideNumber ? { ...s, images: [...s.images, ''] } : s
-      )
-    );
-  }, []);
-
   const removeSlideImage = useCallback((slideNumber, imgIndex) => {
     setSlides((prev) =>
       prev.map((s) => {
@@ -192,6 +188,26 @@ function DesignPlan({ data }) {
       })
     );
   }, []);
+
+  const openImagePicker = useCallback((slideNumber, imgIndex = null) => {
+    setImagePickerTarget({ slideNumber, imgIndex });
+    setImagePickerOpen(true);
+  }, []);
+
+  const handleImageSelect = useCallback((imageUrl) => {
+    if (!imagePickerTarget) return;
+    const { slideNumber, imgIndex } = imagePickerTarget;
+    if (imgIndex !== null) {
+      updateSlideImage(slideNumber, imgIndex, imageUrl);
+    } else {
+      setSlides((prev) =>
+        prev.map((s) =>
+          s.number === slideNumber ? { ...s, images: [...s.images, imageUrl] } : s
+        )
+      );
+    }
+    setImagePickerTarget(null);
+  }, [imagePickerTarget, updateSlideImage]);
 
   const handleDeleteConfirm = () => {
     if (slideToDelete !== null) {
@@ -207,7 +223,7 @@ function DesignPlan({ data }) {
   const isEditingMasterTemplate = editingSection === 'masterTemplate';
 
   return (
-    <div className="space-y-10 p-6 md:p-10 max-w-6xl mx-auto">
+    <div className="space-y-10 p-6 md:p-10 max-w-6xl mx-auto h-full overflow-y-auto scrollbar-none [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
       {/* Header */}
       <div className="flex items-center justify-between">
         <h1 className="font-serif text-4xl md:text-5xl font-medium tracking-tight">
@@ -747,10 +763,11 @@ function DesignPlan({ data }) {
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="h-7 text-xs"
-                          onClick={() => addSlideImage(slide.number)}
+                          className="h-7 text-xs gap-1"
+                          onClick={() => openImagePicker(slide.number)}
                         >
-                          + Add Image
+                          <Plus className="size-3.5" />
+                          Add Image
                         </Button>
                       )}
                     </div>
@@ -758,63 +775,55 @@ function DesignPlan({ data }) {
                       <div className="flex flex-wrap gap-3">
                         {slide.images.map((img, idx) => (
                           <div key={idx} className="relative group">
-                            {isEditingSlide ? (
-                              <div className="flex items-center gap-2">
-                                <Input
-                                  value={img}
-                                  onChange={(e) => updateSlideImage(slide.number, idx, e.target.value)}
-                                  className="text-sm w-64"
-                                  placeholder="Image URL"
-                                />
-                                <Button
-                                  variant="ghost"
-                                  size="icon-sm"
-                                  className="text-destructive"
-                                  onClick={() => removeSlideImage(slide.number, idx)}
+                            <Dialog
+                              open={imageDialog === `${slide.number}-${idx}`}
+                              onOpenChange={(open) => {
+                                if (!open) setImageDialog(null);
+                              }}
+                            >
+                              <DialogTrigger asChild>
+                                <button
+                                  className="relative overflow-hidden rounded-lg ring-1 ring-foreground/10 hover:ring-primary/40 transition-all"
+                                  onClick={() => setImageDialog(`${slide.number}-${idx}`)}
                                 >
-                                  <Trash2 className="size-3.5" />
-                                </Button>
-                              </div>
-                            ) : (
-                              <Dialog
-                                open={imageDialog === `${slide.number}-${idx}`}
-                                onOpenChange={(open) => {
-                                  if (!open) setImageDialog(null);
-                                }}
-                              >
-                                <DialogTrigger asChild>
-                                  <button
-                                    className="relative overflow-hidden rounded-lg ring-1 ring-foreground/10 hover:ring-primary/40 transition-all"
-                                    onClick={() => setImageDialog(`${slide.number}-${idx}`)}
-                                  >
-                                    <img
-                                      src={img}
-                                      alt={`Slide ${slide.number} image ${idx + 1}`}
-                                      className="h-24 w-32 object-cover rounded-lg"
-                                      loading="lazy"
-                                    />
-                                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors rounded-lg" />
-                                  </button>
-                                </DialogTrigger>
-                                <DialogContent className="max-w-[90vw] sm:max-w-[90vw]">
-                                  <DialogHeader>
-                                    <DialogTitle>Slide {slide.number} — Image {idx + 1}</DialogTitle>
-                                  </DialogHeader>
-                                  <div className="flex justify-center">
-                                    <img
-                                      src={img}
-                                      alt={`Slide ${slide.number} image ${idx + 1}`}
-                                      className="max-h-[70vh] max-w-[75vw] rounded-lg object-contain"
-                                    />
-                                  </div>
-                                  <DialogFooter>
-                                    <DialogClose asChild>
-                                      <Button variant="outline">Close</Button>
-                                    </DialogClose>
-                                  </DialogFooter>
-                                </DialogContent>
-                              </Dialog>
-                            )}
+                                  <img
+                                    src={img}
+                                    alt={`Slide ${slide.number} image ${idx + 1}`}
+                                    className="h-24 w-32 object-cover rounded-lg"
+                                    loading="lazy"
+                                  />
+                                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors rounded-lg" />
+                                </button>
+                              </DialogTrigger>
+                              <DialogContent className="max-w-[90vw] sm:max-w-[90vw]">
+                                <DialogHeader>
+                                  <DialogTitle>Slide {slide.number} — Image {idx + 1}</DialogTitle>
+                                </DialogHeader>
+                                <div className="flex justify-center">
+                                  <img
+                                    src={img}
+                                    alt={`Slide ${slide.number} image ${idx + 1}`}
+                                    className="max-h-[70vh] max-w-[75vw] rounded-lg object-contain"
+                                  />
+                                </div>
+                                <DialogFooter>
+                                  {isEditingSlide && (
+                                    <Button
+                                      variant="destructive"
+                                      onClick={() => {
+                                        removeSlideImage(slide.number, idx);
+                                        setImageDialog(null);
+                                      }}
+                                    >
+                                      Remove
+                                    </Button>
+                                  )}
+                                  <DialogClose asChild>
+                                    <Button variant="outline">Close</Button>
+                                  </DialogClose>
+                                </DialogFooter>
+                              </DialogContent>
+                            </Dialog>
                           </div>
                         ))}
                       </div>
@@ -828,6 +837,12 @@ function DesignPlan({ data }) {
           })}
         </div>
       </section>
+
+      <ImagePickerDialog
+        open={imagePickerOpen}
+        onOpenChange={setImagePickerOpen}
+        onSelect={handleImageSelect}
+      />
     </div>
   );
 }

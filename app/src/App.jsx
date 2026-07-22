@@ -1,6 +1,7 @@
 import React from 'react';
 import {BrowserRouter, Route, Routes} from 'react-router';
 import { ThemeProvider } from '@/components/ThemeProvider';
+import { Toaster } from '@/components/ui/sonner';
 import Home from './pages/Home';
 import NotFound from './pages/NotFound';
 import NewProject from './pages/dashboard/NewProject'
@@ -22,6 +23,7 @@ function App() {
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
+      <Toaster />
     </ThemeProvider>
   );
 }

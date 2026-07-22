@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
@@ -32,7 +32,7 @@ function NewProject() {
       {/* Gradient blobs - positioned behind content */}
       {/* Top-left blob - Warm coral/peach */}
       <div
-        className="absolute -top-32 -left-32 w-[600px] h-[600px] rounded-full blur-[140px] opacity-60 dark:opacity-45"
+        className="absolute -top-32 -left-32 w-150 h-150 rounded-full blur-[140px] opacity-60 dark:opacity-45"
         style={{
           background: 'radial-gradient(circle, var(--blob-coral) 0%, transparent 70%)',
         }}
@@ -40,7 +40,7 @@ function NewProject() {
 
       {/* Top-right blob - Soft purple/indigo */}
       <div
-        className="absolute -top-20 -right-32 w-[550px] h-[550px] rounded-full blur-[130px] opacity-55 dark:opacity-40"
+        className="absolute -top-20 -right-32 w-137.5 h-137.5 rounded-full blur-[130px] opacity-55 dark:opacity-40"
         style={{
           background: 'radial-gradient(circle, var(--blob-purple) 0%, transparent 70%)',
         }}
@@ -48,7 +48,7 @@ function NewProject() {
 
       {/* Bottom-right blob - Teal/cyan accent */}
       <div
-        className="absolute -bottom-20 -right-20 w-[500px] h-[500px] rounded-full blur-[140px] opacity-50 dark:opacity-35"
+        className="absolute -bottom-20 -right-20 w-125 h-125 rounded-full blur-[140px] opacity-50 dark:opacity-35"
         style={{
           background: 'radial-gradient(circle, var(--blob-teal) 0%, transparent 70%)',
         }}
@@ -56,7 +56,7 @@ function NewProject() {
 
       {/* Bottom-left blob - Soft amber/gold */}
       <div
-        className="absolute -bottom-32 -left-20 w-[450px] h-[450px] rounded-full blur-[120px] opacity-45 dark:opacity-30"
+        className="absolute -bottom-32 -left-20 w-112.5 h-112.5 rounded-full blur-[120px] opacity-45 dark:opacity-30"
         style={{
           background: 'radial-gradient(circle, var(--blob-amber) 0%, transparent 70%)',
         }}
@@ -64,7 +64,7 @@ function NewProject() {
 
       {/* Center blob - subtle warm glow */}
       <div
-        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[700px] rounded-full blur-[180px] opacity-30 dark:opacity-20"
+        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-175 h-175 rounded-full blur-[180px] opacity-30 dark:opacity-20"
         style={{
           background: 'radial-gradient(circle, var(--blob-purple) 0%, var(--blob-coral) 50%, transparent 70%)',
         }}
@@ -131,7 +131,7 @@ function NewProject() {
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Describe your project idea..."
-                className="min-h-[200px] text-base bg-background/30 backdrop-blur-md border-border/60 focus:border-primary/50 focus:ring-primary/20 resize-y overflow-auto transition-all"
+                className="min-h-50 text-base bg-background/30 backdrop-blur-md border-border/60 focus:border-primary/50 focus:ring-primary/20 resize-y overflow-auto transition-all"
               />
             </div>
 

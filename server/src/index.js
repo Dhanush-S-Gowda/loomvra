@@ -1,53 +1,58 @@
-import fs from "fs"
-import path from "path"
-import preparePlan from "./utils/preparePlan.js"
+import express from "express";
+import cors from "cors";
+import path from "path";
+import { fileURLToPath } from "url";
 
-const userInput = "I want a ppt where it explains about the impact of fertilizers in agriculture mainly focused in indian context. total of 10 slides required. start from history, to present and then also the future implications."
-const model = "deepseek/deepseek-v4-flash"
+import projectRoutes from "./routes/project.routes.js";
+import settingsRoutes from "./routes/settings.routes.js";
 
-const response = await preparePlan(userInput, model, { stream: true })
+// ──────────────────────────────────────────────
+// Start background workers
+// ──────────────────────────────────────────────
+import "./workers/design.worker.js";
+import "./workers/slides.worker.js";
 
-let fullContent = ""
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
-for await (const chunk of response) {
-  // Check for mid-stream errors
-  if ("error" in chunk) {
-    console.error(`Stream error: ${chunk.error.message}`)
-    if (chunk.choices?.[0]?.finish_reason === "error") {
-      console.log("Stream terminated due to error")
-      process.exit(1)
-    }
-    continue
-  }
+const app = express();
+const PORT = process.env.PORT || 3000;
 
-  const content = chunk.choices?.[0]?.delta?.content
-  if (content) {
-    console.log(content)
-    fullContent += content
-    process.stdout.write(content)
-  }
+// ──────────────────────────────────────────────
+// Middleware
+// ──────────────────────────────────────────────
 
-  // Log reasoning if the model streams it
-  const delta = chunk.choices?.[0]?.delta
-  if (delta?.reasoning) {
-    console.log("=== MODEL REASONING ===")
-    console.log(delta.reasoning)
-    console.log("=== END REASONING ===")
-  }
+// CORS – allow frontend on localhost:5173
+app.use(
+    cors({
+        origin: "http://localhost:5173",
+        methods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
+        credentials: true,
+    })
+);
 
-  // Final chunk includes usage stats
-  if (chunk.usage) {
-    console.log("\n\n=== USAGE ===")
-    console.log(chunk.usage)
-  }
-  if (chunk.provider) {
-    console.log("Provider:", chunk.provider)
-  }
-  if (chunk.model) {
-    console.log("Model:", chunk.model)
-  }
-}
+// Parse JSON bodies
+app.use(express.json({ limit: "50mb" }));
 
-// Write the accumulated plan content to file
-const writeTo = path.join(process.cwd(), "plan.md")
-fs.writeFileSync(writeTo, fullContent)
+// Serve Images directory statically so StorageMng.getUrl() paths work
+app.use("/images", express.static(path.resolve(__dirname, "../Images")));
+
+// ──────────────────────────────────────────────
+// Routes
+// ──────────────────────────────────────────────
+app.use(projectRoutes);
+app.use(settingsRoutes);
+
+// Health check
+app.get("/health", (_req, res) => {
+    res.json({ status: "ok", timestamp: new Date().toISOString() });
+});
+
+// ──────────────────────────────────────────────
+// Start server
+// ──────────────────────────────────────────────
+app.listen(PORT, () => {
+    console.log(`🚀 Server running on http://localhost:${PORT}`);
+});
+
+export default app;
