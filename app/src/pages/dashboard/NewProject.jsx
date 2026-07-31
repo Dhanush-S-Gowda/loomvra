@@ -1,20 +1,47 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
-import { ArrowRight, CircleQuestionMark } from 'lucide-react';
+import { ArrowRight, CircleQuestionMark, Loader2 } from 'lucide-react';
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import { toast } from "sonner";
+import { createProject } from '@/lib/api';
 
 function NewProject() {
+  const navigate = useNavigate();
   const [projectName, setProjectName] = useState('');
   const [description, setDescription] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!projectName.trim()) {
+      toast.error("Project name is required");
+      return;
+    }
+    if (!description.trim()) {
+      toast.error("Description is required");
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const result = await createProject(projectName.trim(), description.trim());
+      toast.success(result.message || "Project created!");
+      navigate(`/dashboard/project/${result.projectId}`);
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   return (
-    <div className="relative min-h-screen w-full overflow-hidden">
+    <form onSubmit={handleSubmit} className="relative min-h-screen w-full overflow-hidden">
       {/* Base background */}
       <div className="absolute inset-0 bg-background" />
 
@@ -30,39 +57,30 @@ function NewProject() {
       />
 
       {/* Gradient blobs - positioned behind content */}
-      {/* Top-left blob - Warm coral/peach */}
       <div
         className="absolute -top-32 -left-32 w-150 h-150 rounded-full blur-[140px] opacity-60 dark:opacity-45"
         style={{
           background: 'radial-gradient(circle, var(--blob-coral) 0%, transparent 70%)',
         }}
       />
-
-      {/* Top-right blob - Soft purple/indigo */}
       <div
         className="absolute -top-20 -right-32 w-137.5 h-137.5 rounded-full blur-[130px] opacity-55 dark:opacity-40"
         style={{
           background: 'radial-gradient(circle, var(--blob-purple) 0%, transparent 70%)',
         }}
       />
-
-      {/* Bottom-right blob - Teal/cyan accent */}
       <div
         className="absolute -bottom-20 -right-20 w-125 h-125 rounded-full blur-[140px] opacity-50 dark:opacity-35"
         style={{
           background: 'radial-gradient(circle, var(--blob-teal) 0%, transparent 70%)',
         }}
       />
-
-      {/* Bottom-left blob - Soft amber/gold */}
       <div
         className="absolute -bottom-32 -left-20 w-112.5 h-112.5 rounded-full blur-[120px] opacity-45 dark:opacity-30"
         style={{
           background: 'radial-gradient(circle, var(--blob-amber) 0%, transparent 70%)',
         }}
       />
-
-      {/* Center blob - subtle warm glow */}
       <div
         className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-175 h-175 rounded-full blur-[180px] opacity-30 dark:opacity-20"
         style={{
@@ -73,7 +91,7 @@ function NewProject() {
       {/* Main content - centered vertically and horizontally */}
       <div className="relative z-10 flex flex-col items-center justify-center min-h-screen px-6 py-12">
         <div className="w-full max-w-2xl space-y-10">
-          {/* Welcome heading with Instrument Serif */}
+          {/* Welcome heading */}
           <h1 className="font-serif text-6xl md:text-7xl lg:text-8xl font-normal text-foreground tracking-tight">
             Welcome John.
           </h1>
@@ -105,6 +123,7 @@ function NewProject() {
                 onChange={(e) => setProjectName(e.target.value)}
                 placeholder="Enter your project name"
                 className="h-14 text-lg bg-background/30 backdrop-blur-md border-border/60 focus:border-primary/50 focus:ring-primary/20 transition-all"
+                disabled={submitting}
               />
             </div>
 
@@ -132,23 +151,35 @@ function NewProject() {
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Describe your project idea..."
                 className="min-h-50 text-base bg-background/30 backdrop-blur-md border-border/60 focus:border-primary/50 focus:ring-primary/20 resize-y overflow-auto transition-all"
+                disabled={submitting}
               />
             </div>
 
             {/* Start crafting button */}
             <div className="flex justify-center pt-4">
               <Button
+                type="submit"
                 size="lg"
                 className="group gap-3 px-8 py-6 text-lg font-medium hover:scale-105 hover:shadow-lg transition-all duration-300 ease-out rounded-xl"
+                disabled={submitting}
               >
-                Start crafting
-                <ArrowRight className="size-5 transition-transform duration-300 group-hover:translate-x-1" />
+                {submitting ? (
+                  <>
+                    <Loader2 className="size-5 animate-spin" />
+                    Creating...
+                  </>
+                ) : (
+                  <>
+                    Start crafting
+                    <ArrowRight className="size-5 transition-transform duration-300 group-hover:translate-x-1" />
+                  </>
+                )}
               </Button>
             </div>
           </div>
         </div>
       </div>
-    </div>
+    </form>
   );
 }
 

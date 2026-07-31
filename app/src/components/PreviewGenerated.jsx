@@ -299,10 +299,9 @@ function PresentationMode({ slides, startIndex, onClose }) {
 function PreviewGenerated({ data }) {
   const [activeIndex, setActiveIndex] = useState(0);
   const [presenting, setPresenting] = useState(false);
-  const chatOpen = true;
   const [zoom, setZoom] = useState(1);
   const slides = data?.slides || [];
-  const projectTitle = data?.project?.title || 'Untitled Project';
+  const projectTitle = data?.project?.title || data?.projectId || 'Untitled Project';
   const activeThumbRef = useRef(null);
 
   const activeSlide = slides[activeIndex];

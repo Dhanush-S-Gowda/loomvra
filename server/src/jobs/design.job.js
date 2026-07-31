@@ -1,20 +1,23 @@
-import OpenRouter from "../services/openrouter.js";
-import PlanningSchema from "../schemas/planning.schema.js";
+import { chatCompletion } from "../services/openrouter.js";
 import { searchImage } from "../services/pexels.js";
-import { getSettings, updateProject } from "../storage/db.js";
+import {
+    getSettings,
+    updateProject,
+    markStageCompleted,
+    markStageFailed,
+} from "../storage/db.js";
 import fs from "fs";
 import path from "path";
-import { fileURLToPath } from "url";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import PlanningSchema from "../schemas/planning.schema.js";
 
 /**
  * Design Plan Job
  *
- * 1. Calls OpenRouter to generate the design plan.
- * 2. For each slide's images array, fetches a Pexels image and adds a `src` key.
- * 3. Updates the project row with the enriched design plan and sets design_status = true.
+ * 1. Reads the planning prompt from disk.
+ * 2. Calls OpenRouter (via chatCompletion) with the API key from settings.
+ * 3. For each slide's images array, fetches a Pexels image and adds a `src` key.
+ * 4. Updates the project row with the enriched design plan and marks design_state = completed.
+ *    On failure, marks design_state = failed with the error message.
  */
 export async function generateDesignPlan(data) {
     const { projectId, userInput, model } = data;
@@ -23,43 +26,63 @@ export async function generateDesignPlan(data) {
 
     // 1. Get settings for API keys
     const settings = getSettings();
+    const apiKey = settings?.openrouter_api;
     const pexelApiKey = settings?.pexel_api;
 
+    if (!apiKey) {
+        const errMsg = "OpenRouter API key is not configured in settings.";
+        console.error(`[DesignJob] ${errMsg}`);
+        markStageFailed(projectId, "design", errMsg);
+        throw new Error(errMsg);
+    }
+
+    const resolvedModel = model || settings?.design_model || "deepseek/deepseek-v4-flash";
+
     // 2. Read the planning prompt
-    const planPath = path.join(__dirname, "../prompts/planning.md");
-    const planContent = fs.readFileSync(planPath, "utf-8");
+    const planPath = path.join(import.meta.dirname, "../prompts/planning.md");
+    const systemPrompt = fs.readFileSync(planPath, "utf-8");
 
     // 3. Call OpenRouter
-    console.log(`[DesignJob] Calling OpenRouter for project ${projectId}...`);
-    const response = await OpenRouter.chat.send({
-        chatRequest: {
-            model: model || settings?.design_model || "deepseek/deepseek-v4-flash",
-            messages: [
-                { role: "system", content: planContent },
-                { role: "user", content: userInput },
-            ],
-            responseFormat: {
-                type: "json_schema",
-                jsonSchema: PlanningSchema,
+    console.log(`[DesignJob] Calling OpenRouter for project ${projectId} with model ${resolvedModel}...`);
+    let response;
+    try {
+        response = await chatCompletion({
+            apiKey,
+            model: resolvedModel,
+            systemPrompt,
+            userPrompt: userInput,
+            options: {
+                responseFormat: {
+                    type: "json_schema",
+                    jsonSchema: PlanningSchema,
+                },
+                timeoutMs: 120000,
             },
-            stream: false,
-        },
-    }, {
-        timeoutMs: 120000,
-        retries: { strategy: "none" },
-    });
+        });
+    } catch (err) {
+        const errMsg = `OpenRouter API error: ${err.message}`;
+        console.error(`[DesignJob] ${errMsg}`);
+        markStageFailed(projectId, "design", errMsg);
+        throw err;
+    }
 
     // 4. Parse the design plan
     const plan = response.choices?.[0]?.message?.content;
     if (!plan) {
-        throw new Error(`[DesignJob] No content returned from OpenRouter for project ${projectId}`);
+        const errMsg = "No content returned from OpenRouter.";
+        console.error(`[DesignJob] ${errMsg}`);
+        markStageFailed(projectId, "design", errMsg);
+        throw new Error(errMsg);
     }
 
     let designPlan;
     try {
         designPlan = JSON.parse(plan);
     } catch {
-        throw new Error(`[DesignJob] Failed to parse OpenRouter response as JSON for project ${projectId}`);
+        const errMsg = "Failed to parse OpenRouter response as JSON.";
+        console.error(`[DesignJob] ${errMsg}`);
+        markStageFailed(projectId, "design", errMsg);
+        throw new Error(errMsg);
     }
 
     // 5. Enrich images with Pexels URLs
@@ -69,10 +92,17 @@ export async function generateDesignPlan(data) {
                 for (const img of slide.images) {
                     if (img.keyword && pexelApiKey) {
                         try {
-                            const src = await searchImage(pexelApiKey, img.keyword, img.orientation || "landscape");
+                            const src = await searchImage(
+                                pexelApiKey,
+                                img.keyword,
+                                img.orientation || "landscape"
+                            );
                             img.src = src || "";
                         } catch (err) {
-                            console.error(`[DesignJob] Pexels fetch failed for "${img.keyword}":`, err.message);
+                            console.error(
+                                `[DesignJob] Pexels fetch failed for "${img.keyword}":`,
+                                err.message
+                            );
                             img.src = "";
                         }
                     } else {
@@ -83,11 +113,19 @@ export async function generateDesignPlan(data) {
         }
     }
 
-    // 6. Save the enriched design plan and mark design_status as true
+    // 6. Save the enriched design plan (without touching state — markStageCompleted handles that).
     updateProject(projectId, {
         design_plan: JSON.stringify(designPlan),
+        design_error: null,
         design_status: 1,
     });
+
+    const completed = markStageCompleted(projectId, "design");
+    if (!completed) {
+        console.warn(
+            `[DesignJob] Project ${projectId} state transition was no-op (state: ${projectId}).`
+        );
+    }
 
     console.log(`[DesignJob] Completed for project ${projectId}`);
 }

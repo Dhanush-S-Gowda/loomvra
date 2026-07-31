@@ -11,10 +11,6 @@ const db = new Database(path.resolve(__dirname, "../../app.db"));
 db.pragma("journal_mode = WAL");
 db.pragma("foreign_keys = ON");
 
-// ──────────────────────────────────────────────
-// SCHEMA
-// ──────────────────────────────────────────────
-
 db.exec(`
   CREATE TABLE IF NOT EXISTS settings (
     id INTEGER PRIMARY KEY CHECK (id = 1),
@@ -30,9 +26,14 @@ db.exec(`
     name TEXT NOT NULL,
     user_desc TEXT NOT NULL DEFAULT '',
     design_plan TEXT DEFAULT NULL,
-    design_status BOOLEAN DEFAULT 0 NOT NULL,
-    slides_status BOOLEAN DEFAULT 0 NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    design_state TEXT DEFAULT 'pending' NOT NULL,
+    slides_state TEXT DEFAULT 'pending' NOT NULL,
+    design_error TEXT DEFAULT NULL,
+    slides_error TEXT DEFAULT NULL,
+    master_template TEXT DEFAULT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CHECK (design_state IN ('pending', 'processing', 'completed', 'failed')),
+    CHECK (slides_state IN ('pending', 'processing', 'completed', 'failed'))
   );
 
   CREATE TABLE IF NOT EXISTS slides (
@@ -41,23 +42,62 @@ db.exec(`
     seq_num INTEGER NOT NULL,
     html_content TEXT DEFAULT '',
     images_path TEXT DEFAULT '[]',
-    FOREIGN KEY (project_id) REFERENCES project(id) ON DELETE CASCADE
+    FOREIGN KEY (project_id) REFERENCES project(id) ON DELETE CASCADE,
+    UNIQUE (project_id, seq_num)
   );
 `);
 
-// Ensure the singleton settings row exists
+// Singleton settings row
 db.prepare(`
   INSERT OR IGNORE INTO settings (id, openrouter_api, pexel_api, design_model, main_model, small_model)
   VALUES (1, '', '', '', '', '')
 `).run();
 
-// ──────────────────────────────────────────────
-// SETTINGS HELPERS
-// ──────────────────────────────────────────────
+const PROJECT_WRITABLE_COLUMNS = new Set([
+  "name",
+  "design_plan",
+  "design_state",
+  "slides_state",
+  "design_error",
+  "slides_error",
+  "master_template",
+]);
+
+const ALLOWED_STATES = ["pending", "processing", "completed", "failed"];
+
+function ensureState(value) {
+  if (!ALLOWED_STATES.includes(value)) {
+    throw new Error(`Invalid state: ${value}`);
+  }
+}
+
+export function transitionStage(projectId, stage, toState, errorValue = null) {
+  ensureState(toState);
+
+  const stateCol = stage === "design" ? "design_state" : "slides_state";
+  const errCol = stage === "design" ? "design_error" : "slides_error";
+  
+  const sql = `UPDATE project SET ${stateCol} = ?${
+    errorValue !== null ? `, ${errCol} = ?` : ""
+  } WHERE id = ?`;
+  const params = [toState, errorValue, projectId];
+
+  const result = db.prepare(sql).run(...params);
+  if (result.changes === 0) return null;
+  return getProject(projectId);
+}
+
+// Helper functions
 
 export function getSettings() {
-  const row = db.prepare("SELECT * FROM settings WHERE id = 1").get();
-  if (!row) return null;
+  let row = db.prepare("SELECT * FROM settings WHERE id = 1").get();
+  if (!row) {
+    db.prepare(`
+      INSERT INTO settings (id, openrouter_api, pexel_api, design_model, main_model, small_model)
+      VALUES (1, '', '', '', '', '')
+      `).run();
+    row = db.prepare("SELECT * FROM settings WHERE id = 1").get();
+  }
   const { id, ...settings } = row;
   return settings;
 }
@@ -78,13 +118,15 @@ export function updateSettings(data) {
   return getSettings();
 }
 
-// ──────────────────────────────────────────────
-// PROJECT HELPERS
-// ──────────────────────────────────────────────
+// ----- Project helpers -----
+export function checkProjectNameExists(name) {
+  const stmt = db.prepare("SELECT * FROM project WHERE name = ?");
+  return stmt.get(name) !== undefined;
+}
 
 export function createProject(name, userDesc) {
   const stmt = db.prepare(
-    "INSERT INTO project (name, user_desc) VALUES (?, ?)"
+    "INSERT INTO project (name, user_desc, design_state, slides_state) VALUES (?, ?, 'processing', 'pending')"
   );
   const result = stmt.run(name, userDesc);
   return result.lastInsertRowid;
@@ -94,11 +136,18 @@ export function getProject(id) {
   return db.prepare("SELECT * FROM project WHERE id = ?").get(id);
 }
 
+export function getAllProjects(page = 1, pageSize = 10) {
+  return db
+    .prepare(
+      `SELECT id, name FROM project ORDER BY created_at DESC LIMIT ? OFFSET ?`
+    )
+    .all(pageSize, (page - 1) * pageSize);
+}
+
 export function updateProject(id, data) {
-  const allowed = ["name", "user_desc", "design_plan", "design_status", "slides_status"];
   const sets = [];
   const vals = [];
-  for (const key of allowed) {
+  for (const key of PROJECT_WRITABLE_COLUMNS) {
     if (data[key] !== undefined) {
       sets.push(`${key} = ?`);
       vals.push(data[key]);
@@ -110,9 +159,9 @@ export function updateProject(id, data) {
   return getProject(id);
 }
 
-// ──────────────────────────────────────────────
-// SLIDES HELPERS
-// ──────────────────────────────────────────────
+export function deleteProject(id) {
+  db.prepare("DELETE FROM project WHERE id = ?").run(id);
+}
 
 export function createSlide(projectId, seqNum, htmlContent = "", imagesPath = []) {
   const stmt = db.prepare(
@@ -123,28 +172,40 @@ export function createSlide(projectId, seqNum, htmlContent = "", imagesPath = []
 }
 
 export function getSlidesByProject(projectId) {
-  const rows = db.prepare(
-    "SELECT * FROM slides WHERE project_id = ? ORDER BY seq_num ASC"
-  ).all(projectId);
-  return rows.map(r => ({
+  const rows = db
+    .prepare("SELECT * FROM slides WHERE project_id = ? ORDER BY seq_num ASC")
+    .all(projectId);
+  if (!rows) return [];
+  return rows.map((r) => ({
     ...r,
     images_path: JSON.parse(r.images_path || "[]"),
   }));
 }
 
-export function updateSlide(id, data) {
-  const allowed = ["html_content", "images_path"];
-  const sets = [];
-  const vals = [];
-  for (const key of allowed) {
-    if (data[key] !== undefined) {
-      sets.push(`${key} = ?`);
-      vals.push(key === "images_path" ? JSON.stringify(data[key]) : data[key]);
-    }
-  }
-  if (sets.length === 0) return;
-  vals.push(id);
-  db.prepare(`UPDATE slides SET ${sets.join(", ")} WHERE id = ?`).run(...vals);
-}
+// export function updateSlide(id, data) {
+//   const allowed = ["html_content", "images_path"];
+//   const sets = [];
+//   const vals = [];
+//   for (const key of allowed) {
+//     if (data[key] !== undefined) {
+//       sets.push(`${key} = ?`);
+//       vals.push(key === "images_path" ? JSON.stringify(data[key]) : data[key]);
+//     }
+//   }
+//   if (sets.length === 0) return;
+//   vals.push(id);
+//   db.prepare(`UPDATE slides SET ${sets.join(", ")} WHERE id = ?`).run(...vals);
+// }
+
+// export function upsertSlide(projectId, seqNum, htmlContent, imagesPath = []) {
+//   const existing = db
+//     .prepare("SELECT id FROM slides WHERE project_id = ? AND seq_num = ?")
+//     .get(projectId, seqNum);
+//   if (existing) {
+//     updateSlide(existing.id, { html_content: htmlContent, images_path: imagesPath });
+//     return existing.id;
+//   }
+//   return createSlide(projectId, seqNum, htmlContent, imagesPath);
+// }
 
 export default db;

@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { toast } from "sonner";
-import { InfoIcon } from "lucide-react";
+import { InfoIcon, Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,6 +24,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { getSettings, updateSettings } from "@/lib/api";
 
 const OPENROUTER_MODELS = [
   { value: "anthropic/claude-3.5-sonnet", label: "Claude 3.5 Sonnet" },
@@ -70,11 +71,32 @@ function ModelSelect({ label, tooltip, value, onChange }) {
 
 function Setting() {
   const [apiKey, setApiKey] = useState("");
-  const [planningModel, setPlanningModel] = useState("");
-  const [pptCreationModel, setPptCreationModel] = useState("");
+  const [designModel, setDesignModel] = useState("");
+  const [mainModel, setMainModel] = useState("");
   const [smallModel, setSmallModel] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
-  const handleSaveApiKey = () => {
+  // Fetch settings on mount
+  useEffect(() => {
+    (async () => {
+      try {
+        const settings = await getSettings();
+        setApiKey(settings.openrouter_api || "");
+        setDesignModel(settings.design_model || "");
+        setMainModel(settings.main_model || "");
+        setSmallModel(settings.small_model || "");
+      } catch (err) {
+        toast.error("Failed to load settings", {
+          description: err.message,
+        });
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  const handleSaveApiKey = async () => {
     if (!apiKey.trim()) {
       toast.error("API key is required", {
         description: "Please enter a valid OpenRouter API key.",
@@ -82,11 +104,48 @@ function Setting() {
       return;
     }
 
-    // TODO: Persist the API key securely (e.g., backend or secure storage)
-    toast.success("API key saved", {
-      description: "Your OpenRouter API key has been saved successfully.",
-    });
+    setSaving(true);
+    try {
+      await updateSettings({ openrouter_api_key: apiKey.trim() });
+      toast.success("API key saved", {
+        description: "Your OpenRouter API key has been saved successfully.",
+      });
+    } catch (err) {
+      toast.error("Failed to save API key", {
+        description: err.message,
+      });
+    } finally {
+      setSaving(false);
+    }
   };
+
+  const handleSaveModels = async () => {
+    setSaving(true);
+    try {
+      await updateSettings({
+        design_model: designModel,
+        main_model: mainModel,
+        small_model: smallModel,
+      });
+      toast.success("Models saved", {
+        description: "Your model preferences have been updated.",
+      });
+    } catch (err) {
+      toast.error("Failed to save models", {
+        description: err.message,
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-full p-10">
+        <Loader2 className="w-6 h-6 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <TooltipProvider>
@@ -117,22 +176,24 @@ function Setting() {
                   onChange={(e) => setApiKey(e.target.value)}
                   className="flex-1"
                 />
-                <Button onClick={handleSaveApiKey}>Save</Button>
+                <Button onClick={handleSaveApiKey} disabled={saving}>
+                  {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Save"}
+                </Button>
               </div>
             </div>
 
             <div className="grid gap-4 sm:grid-cols-1">
               <ModelSelect
-                label="Planning model"
+                label="Design model"
                 tooltip="This model is used to create the comprehensive design plan."
-                value={planningModel}
-                onChange={setPlanningModel}
+                value={designModel}
+                onChange={setDesignModel}
               />
               <ModelSelect
                 label="PPT creation model"
                 tooltip="This model should ideally be large and good at writing code for slide generation."
-                value={pptCreationModel}
-                onChange={setPptCreationModel}
+                value={mainModel}
+                onChange={setMainModel}
               />
               <ModelSelect
                 label="Small model"
@@ -141,6 +202,14 @@ function Setting() {
                 onChange={setSmallModel}
               />
             </div>
+
+            <Button onClick={handleSaveModels} disabled={saving} className="self-start">
+              {saving ? (
+                <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Saving…</>
+              ) : (
+                "Save Model Settings"
+              )}
+            </Button>
           </CardContent>
         </Card>
       </div>

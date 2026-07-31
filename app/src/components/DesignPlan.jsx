@@ -1,4 +1,8 @@
 import { useState, useCallback } from 'react';
+import { useNavigate } from 'react-router';
+import { toast } from "sonner";
+import { startCrafting } from '@/lib/api';
+import { Loader2 } from 'lucide-react';
 import {
   Card,
   CardHeader,
@@ -119,7 +123,7 @@ function FontSelectField({ label, value, isEditing, onChange }) {
   );
 }
 
-function DesignPlan({ data }) {
+function DesignPlan({ data, projectId }) {
   const [plan, setPlan] = useState(data);
   const [slides, setSlides] = useState(data.slides);
   const [slideToDelete, setSlideToDelete] = useState(null);
@@ -127,6 +131,8 @@ function DesignPlan({ data }) {
   const [imageDialog, setImageDialog] = useState(null);
   const [imagePickerOpen, setImagePickerOpen] = useState(false);
   const [imagePickerTarget, setImagePickerTarget] = useState(null); // { slideNumber, imgIndex } or { slideNumber } for new
+  const [crafting, setCrafting] = useState(false);
+  const navigate = useNavigate();
 
   const startEdit = (section) => {
     setEditingSection(section);
@@ -216,6 +222,23 @@ function DesignPlan({ data }) {
     }
   };
 
+  const handleStartCrafting = async () => {
+    if (!projectId) {
+      toast.error("Project ID is missing");
+      return;
+    }
+    setCrafting(true);
+    try {
+      const result = await startCrafting(projectId);
+      toast.success(result.message || "Slide generation started!");
+      // Navigate back to project page so it starts polling
+      navigate(`/dashboard/project/${projectId}`, { replace: true });
+    } catch (err) {
+      toast.error(err.message);
+      setCrafting(false);
+    }
+  };
+
   const { project, globalDesign, masterTemplate } = plan;
 
   const isEditingProject = editingSection === 'project';
@@ -229,9 +252,23 @@ function DesignPlan({ data }) {
         <h1 className="font-serif text-4xl md:text-5xl font-medium tracking-tight">
           Design Plan
         </h1>
-        <Button size="lg" className="gap-2 rounded-md">
-          Ready to Craft
-          <ArrowRight className="size-4" />
+        <Button
+          size="lg"
+          className="gap-2 rounded-md"
+          onClick={handleStartCrafting}
+          disabled={crafting}
+        >
+          {crafting ? (
+            <>
+              <Loader2 className="size-4 animate-spin" />
+              Starting…
+            </>
+          ) : (
+            <>
+              Ready to Craft
+              <ArrowRight className="size-4" />
+            </>
+          )}
         </Button>
       </div>
 

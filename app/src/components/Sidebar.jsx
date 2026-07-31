@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router';
 import {
   Sidebar as ShadcnSidebar,
@@ -23,7 +24,6 @@ import { Separator } from '@/components/ui/separator';
 import {
   Plus,
   Settings,
-  FolderOpen,
   PanelLeft,
   MoreHorizontal,
   Pencil,
@@ -31,20 +31,46 @@ import {
   Sun,
   Moon,
   Heart,
+  Loader2,
 } from 'lucide-react';
 import { useTheme } from '@/components/ThemeProvider';
-
-const DUMMY_PROJECTS = [
-  { id: 'proj-1', name: 'Q4 Marketing Deck' },
-  { id: 'proj-2', name: 'Product Roadmap' },
-  { id: 'proj-3', name: 'Investor Pitch' },
-  { id: 'proj-4', name: 'Team Onboarding' },
-  { id: 'proj-5', name: 'Yearly Review lore wifw wfb wfbwfiwfbfba' },
-];
+import { getAllProjects, deleteProject } from '@/lib/api';
+import { toast } from "sonner";
 
 function Sidebar() {
   const location = useLocation();
   const { theme, toggleTheme } = useTheme();
+  const [projects, setProjects] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchProjects = () => {
+    getAllProjects(1, 50)
+      .then((res) => {
+        // res might be an array or { projects: [...] }
+        const list = Array.isArray(res) ? res : (res.projects || []);
+        setProjects(list);
+      })
+      .catch(() => {
+        // Silently fail — sidebar projects are non-critical
+      })
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    fetchProjects();
+  }, [location.pathname]); // re-fetch when navigating
+
+  const handleDelete = async (e, id, name) => {
+    e.stopPropagation();
+    if (!confirm(`Delete "${name}"?`)) return;
+    try {
+      await deleteProject(id);
+      toast.success(`Deleted "${name}"`);
+      fetchProjects();
+    } catch (err) {
+      toast.error(err.message);
+    }
+  };
 
   return (
     <ShadcnSidebar collapsible="icon">
@@ -74,52 +100,65 @@ function Sidebar() {
             Projects
           </SidebarGroupLabel>
           <SidebarGroupContent>
-            <SidebarMenu>
-              {DUMMY_PROJECTS.map((project) => {
-                const projectPath = `/dashboard/project/${project.id}`;
-                const isActive = location.pathname === projectPath;
+            {loading ? (
+              <div className="flex justify-center py-4">
+                <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+              </div>
+            ) : projects.length === 0 ? (
+              <p className="text-xs text-muted-foreground px-3 py-2">No projects yet</p>
+            ) : (
+              <SidebarMenu>
+                {projects.map((project) => {
+                  const projectId = project.id || project.projectId;
+                  const projectName = project.name || project.title || "Untitled";
+                  const projectPath = `/dashboard/project/${projectId}`;
+                  const isActive = location.pathname === projectPath;
 
-                return (
-                  <SidebarMenuItem key={project.id} className="group/menu-item my-0.5">
-                    <SidebarMenuButton
-                      asChild
-                      tooltip={project.name}
-                      isActive={isActive}
-                      className="overflow-visible"
-                    >
-                      <div className="flex items-center justify-between w-full">
-                        <Link to={projectPath} className="flex-1 min-w-0">
-                          <span className="truncate block">{project.name}</span>
-                        </Link>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-6 w-6 shrink-0 opacity-0 group-hover/menu-item:opacity-100 transition-opacity"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              <MoreHorizontal className="size-4" />
-                              <span className="sr-only">More options for {project.name}</span>
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" side="bottom">
-                            <DropdownMenuItem>
-                              <Pencil className="size-4 mr-2" />
-                              <span>Rename</span>
-                            </DropdownMenuItem>
-                            <DropdownMenuItem variant="destructive">
-                              <Trash2 className="size-4 mr-2" />
-                              <span>Delete</span>
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                );
-              })}
-            </SidebarMenu>
+                  return (
+                    <SidebarMenuItem key={projectId} className="group/menu-item my-0.5">
+                      <SidebarMenuButton
+                        asChild
+                        tooltip={projectName}
+                        isActive={isActive}
+                        className="overflow-visible"
+                      >
+                        <div className="flex items-center justify-between w-full">
+                          <Link to={projectPath} className="flex-1 min-w-0">
+                            <span className="truncate block">{projectName}</span>
+                          </Link>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6 shrink-0 opacity-0 group-hover/menu-item:opacity-100 transition-opacity"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <MoreHorizontal className="size-4" />
+                                <span className="sr-only">More options for {projectName}</span>
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" side="bottom">
+                              <DropdownMenuItem>
+                                <Pencil className="size-4 mr-2" />
+                                <span>Rename</span>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                variant="destructive"
+                                onClick={(e) => handleDelete(e, projectId, projectName)}
+                              >
+                                <Trash2 className="size-4 mr-2" />
+                                <span>Delete</span>
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  );
+                })}
+              </SidebarMenu>
+            )}
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>

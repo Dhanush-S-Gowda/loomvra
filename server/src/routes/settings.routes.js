@@ -3,9 +3,6 @@ import { getSettings, updateSettings } from "../storage/db.js";
 
 const router = Router();
 
-// ──────────────────────────────────────────────
-// GET /settings
-// ──────────────────────────────────────────────
 router.get("/settings", (req, res) => {
     try {
         const settings = getSettings();
@@ -19,9 +16,6 @@ router.get("/settings", (req, res) => {
     }
 });
 
-// ──────────────────────────────────────────────
-// PATCH /settings
-// ──────────────────────────────────────────────
 router.patch("/settings", (req, res) => {
     try {
         const updated = updateSettings(req.body);
