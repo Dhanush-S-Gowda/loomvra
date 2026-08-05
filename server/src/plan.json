@@ -1,0 +1,85 @@
+{"projectId":"proj-1",
+  "state":"design",
+  "project":
+    {"title":"Water Pollution: A Modern Crisis",
+    "topic":"Water Pollution",
+    "purpose":"Raise awareness and propose solutions",
+    "audience":"General Audience, Policy Makers, Environmental Enthusiasts",
+    "language":"English",
+    "slideCount":3},
+  "globalDesign":{
+    "theme":"Modern Environmental Awareness",
+    "primary_color":"#0A4D68",
+    "secondary_color":"#1B9AAA",
+    "accent_color":"#F26419",
+    "background_color":"#F4F9F9",
+    "text_color":"#1B262C",
+    "heading_font":"Verdana Bold",
+    "subHeading_font":"Verdana SemiBold",
+    "body_font":"Verdana Regular",
+    "designConcepts":"Minimalist, clean lines, subtle water texture, modern corporate, high-contrast, professional",
+    "overallGuidelines":"Maintain a clean, modern, and professional aesthetic. Use the deep blue as dominant, with teal as secondary and orange as a deliberate accent for emphasis only. Keep slides airy with generous whitespace. Use subtle geometric water-inspired shapes (e.g., soft waves) in the background at low opacity for visual interest without distraction. Ensure all text is highly readable with strong contrast against the background. All slides should feel cohesive, crisp, and contemporary."},
+  "masterTemplate":{
+    "backgroundType":"Solid with subtle geometric pattern",
+    "backgroundDescription":"Pale off-white background with extremely faint, low-opacity wave lines across the bottom to subtly evoke water movement without distracting.",
+    "persistentElements":[{"type":"Logo",
+      "position":"Top Left"},{"type":"Footer Text: 'Dhanush S Gowda'",
+      "position":"Bottom Left"},{"type":"Slide Number",
+      "position":"Bottom Right"},{"type":"Thin Accent Line (Teal)",
+      "position":"Bottom Edge (above footer)"}]
+  },
+  "slides":[{"number":1,"title":"Problem Statement",
+      "objective":"Highlight the severity and urgency of water pollution.",
+      "content":"# Water Pollution\n## A Growing Global Crisis\n\n- **2 billion** people lack access to safe drinking water\n- **80%** of global wastewater is released untreated\n- **1 million** seabirds and **100,000** marine mammals die annually from pollution\n- Contaminants include plastics, chemicals, and agricultural runoff\n\n> \"Water is life, and clean water means health.\" - Audrey Hepburn",
+      "layout":"Split Layout with Text Emphasis",
+      "background":"Consistent with master template, with an additional soft teal gradient block on the right half to form a visual container for the image.",
+      "elementPlacement":"Left 50%: Title at top-left, followed by concise bullet points with bold accents on key numbers. A quote is placed at the lower-left for emotional impact. Right 50%: A large, full-height image of polluted water body (e.g., plastic-filled ocean). Minimal text on the right to let the image speak.",
+      "visualHierarchy":"Title is the primary focal point. Key statistics in accent color draw immediate attention. The image is the secondary focal point, reinforcing the problem emotionally. The quote adds a subtle supporting layer.",
+      "stylingNotes":"Keep the left side clean with ample white space. Use the accent orange sparingly to highlight numbers. The image should be powerful and slightly desaturated to blend with the modern palette. Quote in italic, with subtle teal quotation marks for style.",
+      "images":[
+        {
+          "purpose":"Powerful visual of polluted water to evoke urgency",
+          "keyword":"polluted ocean plastic",
+          "orientation":"portrait",
+          "src":"https://images.pexels.com/photos/31223075/pexels-photo-31223075.jpeg"
+        }
+      ]
+    },
+    {
+      "number":2,
+      "title":"Solution",
+      "objective":"Present actionable and hopeful solutions to combat water pollution.",
+      "content":"# Hope on the Horizon\n## Practical Steps to a Cleaner Future\n\n### 1. Upgrade Infrastructure\nInvest in modern wastewater treatment plants.\n\n### 2. Reduce Plastic Use\nBan single-use plastics and promote recycling.\n\n### 3. Sustainable Agriculture\nMinimize chemical runoff through responsible farming.\n\n### 4. Community Action\nEducate and engage local communities for river clean-up drives.",
+      "layout":"Three-Column Grid with Visual Anchors",
+      "background":"Consistent with master template, with a subtle upward wave graphic at the bottom to suggest progress and positive motion.",
+      "elementPlacement":"Title at top-left. Below, a three-column grid: each column has a simple icon, a bold heading, and a one-line description. Icons are placed above headings, all in a consistent size and style. A horizontal teal line connects the top of each column to visually unify them.",
+      "visualHierarchy":"Title establishes the theme. Columns follow a clear left-to-right reading sequence. Icons act as visual anchors. The bold headings (e.g., 'Upgrade Infrastructure') are the next focus after the icons. Descriptions are secondary and subdued.",
+      "stylingNotes":"Use flat, modern icons in teal with dark text. Column containers are subtle white cards with soft shadows to create separation without heavy borders. Keep the overall look airy and optimistic.",
+      "images":[
+        {
+          "purpose":"Symbolic image of clean water or environmental restoration",
+          "keyword":"clean water drop",
+          "orientation":"landscape",
+          "src":"https://images.pexels.com/photos/10615852/pexels-photo-10615852.jpeg"
+        }
+      ]
+    },
+    {
+      "number":3,
+      "title":"Thank You",
+      "objective":"Express gratitude and inspire further action.",
+      "content":"# Thank You!\n\nTogether, we can turn the tide on water pollution.\n\n**Act now. Protect our water.**",
+      "layout":"Centered Minimalist Layout",
+      "background":"Consistent with master template, with a soft full-slide gradient overlay from deep blue at the bottom to the off-white at the top, evoking a sense of depth and hope.",
+      "elementPlacement":"Large 'Thank You' centered vertically and horizontally. Below it, a short call-to-action line in the accent color. A subtle decorative wave pattern sits at the bottom to tie back to the water theme.",
+      "visualHierarchy":"'Thank You' is the absolute focal point. The call-to-action acts as a secondary emphasis. Background wave pattern is purely decorative and very subtle.",
+      "stylingNotes":"Keep everything minimal and impactful. Use strong typography for 'Thank You' with a slight color gradient from teal to deep blue for a modern touch. The call-to-action should be bold but understated, in the accent orange for that deliberate pop of attention.",
+      "images":[
+        {
+          "src":"http://localhost:3000/images/proj-1-1785822998884-a8dc25f3.jpg",
+          "purpose":"this is a nice aesthetic image with a river"
+        }
+      ]
+    }
+  ]
+}

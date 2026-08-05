@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router";
 import DesignPlan from '@/components/DesignPlan';
 import PreviewGenerated from '@/components/PreviewGenerated';
 import { fetchProjectAPI } from '@/lib/mockApi';
-import { retryDesign } from '@/lib/api';
+import { retryDesign, retrySlides } from '@/lib/api';
 import { TriangleAlert, Loader2, Palette, Layers, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from "sonner";
@@ -155,6 +155,17 @@ function Project() {
     }
   };
 
+  const handleRetrySlides = async () => {
+    try {
+      toast.info("Retrying slide generation…");
+      await retrySlides(pid);
+      setLoading(true);
+      poll(pid, { current: false });
+    } catch (err) {
+      toast.error(err.message);
+    }
+  };
+
   if (loading && !data) {
     return (
       <div className="flex items-center justify-center h-full p-10">
@@ -249,8 +260,9 @@ function Project() {
           {data.error || "Something went wrong while generating slides."}
         </span>
         <div className="flex gap-3 mt-2">
-          <Button variant="outline" onClick={() => navigate("/dashboard/")}>
-            New Project
+          <Button onClick={handleRetrySlides}>
+            <RefreshCw className="w-4 h-4 mr-2" />
+            Retry Slides
           </Button>
         </div>
       </div>

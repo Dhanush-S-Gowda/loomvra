@@ -11,14 +11,19 @@ import { Search, Upload, ImageIcon, X, Loader2, ArrowLeft } from 'lucide-react';
 
 const PEXELS_API_KEY = import.meta.env.VITE_PEXELS_API_KEY;
 const PEXELS_API_URL = 'https://api.pexels.com/v1/search';
+const RESULTS_PER_PAGE = 30;
 
 export default function ImagePickerDialog({ open, onOpenChange, onSelect }) {
   const [activeTab, setActiveTab] = useState('upload');
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [searchPage, setSearchPage] = useState(1);
+  const [hasMoreResults, setHasMoreResults] = useState(false);
   const [searchError, setSearchError] = useState(null);
   const [uploadPreview, setUploadPreview] = useState(null);
+  const [imagePurpose, setImagePurpose] = useState('');
   const [isDragging, setIsDragging] = useState(false);
   const [previewPhoto, setPreviewPhoto] = useState(null);
   const fileInputRef = useRef(null);
@@ -27,8 +32,12 @@ export default function ImagePickerDialog({ open, onOpenChange, onSelect }) {
     setActiveTab('upload');
     setSearchQuery('');
     setSearchResults([]);
+    setSearchPage(1);
+    setHasMoreResults(false);
+    setIsLoadingMore(false);
     setSearchError(null);
     setUploadPreview(null);
+    setImagePurpose('');
     setIsDragging(false);
     setPreviewPhoto(null);
   }, []);
@@ -72,8 +81,8 @@ export default function ImagePickerDialog({ open, onOpenChange, onSelect }) {
   };
 
   const handleConfirmUpload = () => {
-    if (uploadPreview) {
-      onSelect(uploadPreview);
+    if (uploadPreview && imagePurpose.trim()) {
+      onSelect({ src: uploadPreview, purpose: imagePurpose.trim() });
       resetState();
       onOpenChange(false);
     }
@@ -82,12 +91,15 @@ export default function ImagePickerDialog({ open, onOpenChange, onSelect }) {
   const handleSearch = async () => {
     if (!searchQuery.trim()) return;
     setIsSearching(true);
+    setIsLoadingMore(false);
     setSearchError(null);
     setSearchResults([]);
+    setSearchPage(1);
+    setHasMoreResults(false);
     setPreviewPhoto(null);
     try {
       const response = await fetch(
-        `${PEXELS_API_URL}?query=${encodeURIComponent(searchQuery.trim())}&per_page=24`,
+        `${PEXELS_API_URL}?query=${encodeURIComponent(searchQuery.trim())}&per_page=${RESULTS_PER_PAGE}&page=1`,
         {
           headers: {
             Authorization: PEXELS_API_KEY,
@@ -105,10 +117,54 @@ export default function ImagePickerDialog({ open, onOpenChange, onSelect }) {
       }
       const data = await response.json();
       setSearchResults(data.photos || []);
+      setHasMoreResults((data.photos || []).length === RESULTS_PER_PAGE);
     } catch (err) {
       setSearchError(err.message);
     } finally {
       setIsSearching(false);
+    }
+  };
+
+  const handleLoadMore = async () => {
+    if (isSearching || isLoadingMore || !hasMoreResults || !searchQuery.trim()) return;
+
+    const nextPage = searchPage + 1;
+    setIsLoadingMore(true);
+    setSearchError(null);
+
+    try {
+      const response = await fetch(
+        `${PEXELS_API_URL}?query=${encodeURIComponent(searchQuery.trim())}&per_page=${RESULTS_PER_PAGE}&page=${nextPage}`,
+        {
+          headers: {
+            Authorization: PEXELS_API_KEY,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        if (response.status === 429) {
+          throw new Error('Rate limit exceeded. Please try again later.');
+        }
+        throw new Error('Failed to load more images from Pexels.');
+      }
+
+      const data = await response.json();
+      const nextPhotos = data.photos || [];
+      setSearchResults((currentResults) => [...currentResults, ...nextPhotos]);
+      setSearchPage(nextPage);
+      setHasMoreResults(nextPhotos.length === RESULTS_PER_PAGE);
+    } catch (err) {
+      setSearchError(err.message);
+    } finally {
+      setIsLoadingMore(false);
+    }
+  };
+
+  const handleResultsScroll = (e) => {
+    const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
+    if (scrollTop + clientHeight >= scrollHeight - 8) {
+      handleLoadMore();
     }
   };
 
@@ -119,7 +175,11 @@ export default function ImagePickerDialog({ open, onOpenChange, onSelect }) {
   };
 
   const handleSelectPexelsImage = (photo) => {
-    onSelect(photo.src.large || photo.src.original);
+    if (!imagePurpose.trim()) return;
+    onSelect({
+      src: photo.src.large || photo.src.original,
+      purpose: imagePurpose.trim(),
+    });
     resetState();
     onOpenChange(false);
   };
@@ -167,7 +227,10 @@ export default function ImagePickerDialog({ open, onOpenChange, onSelect }) {
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6 min-h-[320px]">
+        <div
+          className="flex-1 overflow-y-auto p-6 min-h-[320px]"
+          onScroll={handleResultsScroll}
+        >
           {activeTab === 'upload' && (
             <div className="space-y-4">
               {!uploadPreview ? (
@@ -223,7 +286,21 @@ export default function ImagePickerDialog({ open, onOpenChange, onSelect }) {
                     <Button variant="outline" onClick={() => setUploadPreview(null)}>
                       Cancel
                     </Button>
-                    <Button onClick={handleConfirmUpload}>Use this image</Button>
+                    <div className="w-full max-w-sm space-y-2">
+                      <Input
+                        placeholder="What should this image illustrate?"
+                        value={imagePurpose}
+                        onChange={(e) => setImagePurpose(e.target.value)}
+                        aria-label="Image purpose"
+                      />
+                      <Button
+                        className="w-full"
+                        onClick={handleConfirmUpload}
+                        disabled={!imagePurpose.trim()}
+                      >
+                        Use this image
+                      </Button>
+                    </div>
                   </div>
                 </div>
               )}
@@ -269,13 +346,25 @@ export default function ImagePickerDialog({ open, onOpenChange, onSelect }) {
                         Pexels
                       </a>
                     </p>
-                    <div className="flex gap-2">
+                    <div className="flex flex-col items-end gap-2">
+                      <Input
+                        placeholder="What should this image illustrate?"
+                        value={imagePurpose}
+                        onChange={(e) => setImagePurpose(e.target.value)}
+                        aria-label="Image purpose"
+                        className="w-72"
+                      />
+                      <div className="flex gap-2">
                       <Button variant="outline" onClick={() => setPreviewPhoto(null)}>
                         Cancel
                       </Button>
-                      <Button onClick={() => handleSelectPexelsImage(previewPhoto)}>
+                      <Button
+                        onClick={() => handleSelectPexelsImage(previewPhoto)}
+                        disabled={!imagePurpose.trim()}
+                      >
                         Use this image
                       </Button>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -333,6 +422,13 @@ export default function ImagePickerDialog({ open, onOpenChange, onSelect }) {
                           </button>
                         ))}
                       </div>
+                      {isLoadingMore && (
+                        <div className="flex justify-center items-center gap-1 py-3" aria-label="Loading more images">
+                          <span className="size-1.5 rounded-full bg-muted-foreground animate-bounce [animation-delay:-0.3s]" />
+                          <span className="size-1.5 rounded-full bg-muted-foreground animate-bounce [animation-delay:-0.15s]" />
+                          <span className="size-1.5 rounded-full bg-muted-foreground animate-bounce" />
+                        </div>
+                      )}
                       <p className="text-xs text-muted-foreground text-center">
                         Photos provided by{' '}
                         <a

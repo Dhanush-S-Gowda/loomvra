@@ -5,12 +5,17 @@ import { InfoIcon, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  Combobox,
+  ComboboxCollection,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxGroup,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxLabel,
+  ComboboxList,
+  ComboboxSeparator,
+} from "@/components/ui/combobox";
 import {
   Tooltip,
   TooltipContent,
@@ -24,24 +29,43 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { getSettings, updateSettings } from "@/lib/api";
+import {
+  getModels,
+  getSettings,
+  updateSettings,
+  verifyOpenRouterKey,
+  verifyPexelsKey,
+} from "@/lib/api";
 
-const OPENROUTER_MODELS = [
-  { value: "anthropic/claude-3.5-sonnet", label: "Claude 3.5 Sonnet" },
-  { value: "anthropic/claude-3.5-haiku", label: "Claude 3.5 Haiku" },
-  { value: "openai/gpt-4o", label: "GPT-4o" },
-  { value: "openai/gpt-4o-mini", label: "GPT-4o Mini" },
-  { value: "google/gemini-2.0-flash-001", label: "Gemini 2.0 Flash" },
-  { value: "google/gemini-2.0-flash-lite-001", label: "Gemini 2.0 Flash Lite" },
-  { value: "deepseek/deepseek-chat", label: "DeepSeek V3" },
-  { value: "deepseek/deepseek-r1", label: "DeepSeek R1" },
-  { value: "meta-llama/llama-3.3-70b-instruct", label: "Llama 3.3 70B" },
-  { value: "meta-llama/llama-3.1-8b-instruct", label: "Llama 3.1 8B" },
-  { value: "qwen/qwen-2.5-72b-instruct", label: "Qwen 2.5 72B" },
-  { value: "qwen/qwen-2.5-7b-instruct", label: "Qwen 2.5 7B" },
-];
+// Format pricing as "in $X / cache $Y / out $Z per 1M" (per million tokens),
+// rounded to 4 decimal places. Cache is omitted when unavailable.
+function formatPricing(model) {
+  const { promptPerM, completionPerM, inputCacheReadPerM } = model.pricing;
+  const round = (n) => String(Number(n).toFixed(4)).replace(/\.?0+$/, "");
+  const parts = [`in $${round(promptPerM)}`, `out $${round(completionPerM)}`];
+  if (inputCacheReadPerM != null) {
+    parts.splice(1, 0, `cache $${round(inputCacheReadPerM)}`);
+  }
+  return `${parts.join(" / ")} per 1M`;
+}
 
-function ModelSelect({ label, tooltip, value, onChange }) {
+// Find a model by its id ("provider/model_name") within the grouped list.
+function findModel(groups, id) {
+  if (!id) return null;
+  for (const group of groups) {
+    const found = group.models.find((m) => m.id === id);
+    if (found) return found;
+  }
+  return null;
+}
+
+function ModelSelect({ label, tooltip, value, onChange, groups }) {
+  // Base UI expects each group to expose an `items` array.
+  const items = groups.map((group) => ({
+    value: group.provider,
+    items: group.models,
+  }));
+
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-center gap-1.5 text-sm font-medium">
@@ -53,39 +77,71 @@ function ModelSelect({ label, tooltip, value, onChange }) {
           <TooltipContent side="top">{tooltip}</TooltipContent>
         </Tooltip>
       </div>
-      <Select value={value} onValueChange={onChange}>
-        <SelectTrigger className="w-full">
-          <SelectValue placeholder="Select a model" />
-        </SelectTrigger>
-        <SelectContent>
-          {OPENROUTER_MODELS.map((model) => (
-            <SelectItem key={model.value} value={model.value}>
-              {model.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      <Combobox
+        items={items}
+        value={value}
+        onValueChange={onChange}
+        itemToStringLabel={(model) => model.name}
+      >
+        <ComboboxInput placeholder="Select a model" className="w-full" />
+        <ComboboxContent>
+          <ComboboxEmpty>No models found.</ComboboxEmpty>
+          <ComboboxList>
+            {(group, index) => (
+              <ComboboxGroup key={group.value} items={group.items}>
+                <ComboboxLabel>{group.value}</ComboboxLabel>
+                <ComboboxCollection>
+                  {(model) => (
+                    <ComboboxItem key={model.id} value={model}>
+                      <span className="flex flex-col">
+                        <span>{model.name}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {formatPricing(model)}
+                        </span>
+                      </span>
+                    </ComboboxItem>
+                  )}
+                </ComboboxCollection>
+                {index < items.length - 1 && <ComboboxSeparator />}
+              </ComboboxGroup>
+            )}
+          </ComboboxList>
+        </ComboboxContent>
+      </Combobox>
     </div>
   );
 }
 
 function Setting() {
   const [apiKey, setApiKey] = useState("");
-  const [designModel, setDesignModel] = useState("");
-  const [mainModel, setMainModel] = useState("");
-  const [smallModel, setSmallModel] = useState("");
+  const [pexelApiKey, setPexelApiKey] = useState("");
+  const [designModel, setDesignModel] = useState(null);
+  const [mainModel, setMainModel] = useState(null);
+  const [smallModel, setSmallModel] = useState(null);
+  const [modelGroups, setModelGroups] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [verifying, setVerifying] = useState(null); // "openrouter" | "pexels" | null
+  const [openRouterVerified, setOpenRouterVerified] = useState(false);
+  const [pexelsVerified, setPexelsVerified] = useState(false);
 
-  // Fetch settings on mount
+  // Fetch settings and supported models on mount
   useEffect(() => {
     (async () => {
       try {
-        const settings = await getSettings();
+        const [settings, models] = await Promise.all([
+          getSettings(),
+          getModels(),
+        ]);
         setApiKey(settings.openrouter_api || "");
-        setDesignModel(settings.design_model || "");
-        setMainModel(settings.main_model || "");
-        setSmallModel(settings.small_model || "");
+        setPexelApiKey(settings.pexel_api || "");
+        setModelGroups(models);
+        setDesignModel(findModel(models, settings.design_model));
+        setMainModel(findModel(models, settings.main_model));
+        setSmallModel(findModel(models, settings.small_model));
+        // If a key is already stored, consider it verified.
+        setOpenRouterVerified(Boolean(settings.openrouter_api));
+        setPexelsVerified(Boolean(settings.pexel_api));
       } catch (err) {
         toast.error("Failed to load settings", {
           description: err.message,
@@ -96,7 +152,7 @@ function Setting() {
     })();
   }, []);
 
-  const handleSaveApiKey = async () => {
+  const handleVerifyApiKey = async () => {
     if (!apiKey.trim()) {
       toast.error("API key is required", {
         description: "Please enter a valid OpenRouter API key.",
@@ -104,18 +160,45 @@ function Setting() {
       return;
     }
 
-    setSaving(true);
+    setVerifying("openrouter");
     try {
-      await updateSettings({ openrouter_api_key: apiKey.trim() });
-      toast.success("API key saved", {
-        description: "Your OpenRouter API key has been saved successfully.",
+      await verifyOpenRouterKey(apiKey.trim());
+      setOpenRouterVerified(true);
+      toast.success("OpenRouter API key verified", {
+        description: "Your OpenRouter API key is valid.",
       });
     } catch (err) {
-      toast.error("Failed to save API key", {
+      setOpenRouterVerified(false);
+      toast.error("Verification failed", {
         description: err.message,
       });
     } finally {
-      setSaving(false);
+      setVerifying(null);
+    }
+  };
+
+  const handleVerifyPexelApiKey = async () => {
+    if (!pexelApiKey.trim()) {
+      toast.error("API key is required", {
+        description: "Please enter a valid Pexels API key.",
+      });
+      return;
+    }
+
+    setVerifying("pexels");
+    try {
+      await verifyPexelsKey(pexelApiKey.trim());
+      setPexelsVerified(true);
+      toast.success("Pexels API key verified", {
+        description: "Your Pexels API key is valid.",
+      });
+    } catch (err) {
+      setPexelsVerified(false);
+      toast.error("Verification failed", {
+        description: err.message,
+      });
+    } finally {
+      setVerifying(null);
     }
   };
 
@@ -123,21 +206,32 @@ function Setting() {
     setSaving(true);
     try {
       await updateSettings({
-        design_model: designModel,
-        main_model: mainModel,
-        small_model: smallModel,
+        openrouter_api: apiKey.trim(),
+        pexel_api: pexelApiKey.trim(),
+        design_model: designModel?.id ?? "",
+        main_model: mainModel?.id ?? "",
+        small_model: smallModel?.id ?? "",
       });
-      toast.success("Models saved", {
-        description: "Your model preferences have been updated.",
+      toast.success("Settings saved", {
+        description: "Your API keys and model preferences have been updated.",
       });
     } catch (err) {
-      toast.error("Failed to save models", {
+      toast.error("Failed to save settings", {
         description: err.message,
       });
     } finally {
       setSaving(false);
     }
   };
+
+  // Save Model Settings is only enabled once both keys are verified and a
+  // model is selected for each of the three model fields.
+  const canSaveModels =
+    openRouterVerified &&
+    pexelsVerified &&
+    Boolean(designModel) &&
+    Boolean(mainModel) &&
+    Boolean(smallModel);
 
   if (loading) {
     return (
@@ -159,15 +253,15 @@ function Setting() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-2xl">OpenRouter</CardTitle>
+            <CardTitle className="text-2xl">API Keys</CardTitle>
             <CardDescription>
-              Configure your OpenRouter API key and choose the models for
-              different tasks.
+              Configure your OpenRouter and Pexels API keys. Verify each key
+              before saving.
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-6">
             <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium">API Key</label>
+              <label className="text-sm font-medium">OpenRouter API Key</label>
               <div className="flex gap-2">
                 <Input
                   type="password"
@@ -176,10 +270,50 @@ function Setting() {
                   onChange={(e) => setApiKey(e.target.value)}
                   className="flex-1"
                 />
-                <Button onClick={handleSaveApiKey} disabled={saving}>
-                  {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Save"}
+                <Button
+                  onClick={handleVerifyApiKey}
+                  disabled={verifying === "openrouter"}
+                >
+                  {verifying === "openrouter" ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    "Verify"
+                  )}
                 </Button>
               </div>
+              {openRouterVerified && (
+                <p className="text-sm text-green-600">
+                  ✓ OpenRouter API key verified
+                </p>
+              )}
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-medium">Pexels API Key</label>
+              <div className="flex gap-2">
+                <Input
+                  type="password"
+                  placeholder="Pexels API key"
+                  value={pexelApiKey}
+                  onChange={(e) => setPexelApiKey(e.target.value)}
+                  className="flex-1"
+                />
+                <Button
+                  onClick={handleVerifyPexelApiKey}
+                  disabled={verifying === "pexels"}
+                >
+                  {verifying === "pexels" ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    "Verify"
+                  )}
+                </Button>
+              </div>
+              {pexelsVerified && (
+                <p className="text-sm text-green-600">
+                  ✓ Pexels API key verified
+                </p>
+              )}
             </div>
 
             <div className="grid gap-4 sm:grid-cols-1">
@@ -188,28 +322,41 @@ function Setting() {
                 tooltip="This model is used to create the comprehensive design plan."
                 value={designModel}
                 onChange={setDesignModel}
+                groups={modelGroups}
               />
               <ModelSelect
                 label="PPT creation model"
                 tooltip="This model should ideally be large and good at writing code for slide generation."
                 value={mainModel}
                 onChange={setMainModel}
+                groups={modelGroups}
               />
               <ModelSelect
                 label="Small model"
                 tooltip="This model is used for small tasks like context creation. A tiny, cheap model is sufficient."
                 value={smallModel}
                 onChange={setSmallModel}
+                groups={modelGroups}
               />
             </div>
 
-            <Button onClick={handleSaveModels} disabled={saving} className="self-start">
+            <Button
+              onClick={handleSaveModels}
+              disabled={!canSaveModels || saving}
+              className="self-start"
+            >
               {saving ? (
                 <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Saving…</>
               ) : (
                 "Save Model Settings"
               )}
             </Button>
+            {!canSaveModels && (
+              <p className="text-sm text-muted-foreground">
+                Verify both API keys and select all three models to enable
+                saving.
+              </p>
+            )}
           </CardContent>
         </Card>
       </div>

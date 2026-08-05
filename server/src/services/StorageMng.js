@@ -6,6 +6,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const IMAGES_DIR = path.resolve(__dirname, "../../Images");
+const PUBLIC_BASE_URL = (process.env.PUBLIC_BASE_URL ||
+    `http://localhost:3000`).replace(/\/$/, "");
 
 /**
  * S3-like storage manager for images stored in the local Images directory.
@@ -20,9 +22,10 @@ const StorageMng = {
      */
     async put(filename, data) {
         await fs.mkdir(IMAGES_DIR, { recursive: true });
-        const filePath = path.join(IMAGES_DIR, filename);
+        const safeFilename = path.basename(filename);
+        const filePath = path.join(IMAGES_DIR, safeFilename);
         await fs.writeFile(filePath, data);
-        return filename;
+        return safeFilename;
     },
 
     /**
@@ -31,7 +34,7 @@ const StorageMng = {
      * @returns {Promise<string>} Absolute path to the file
      */
     async get(filename) {
-        const filePath = path.join(IMAGES_DIR, filename);
+        const filePath = path.join(IMAGES_DIR, path.basename(filename));
         await fs.access(filePath);
         return filePath;
     },
@@ -42,7 +45,8 @@ const StorageMng = {
      * @returns {string} URL path like "/images/filename"
      */
     getUrl(filename) {
-        return `/images/${filename}`;
+        const safeFilename = path.basename(filename);
+        return `${PUBLIC_BASE_URL}/images/${encodeURIComponent(safeFilename)}`;
     },
 
     /**

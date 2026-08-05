@@ -5,129 +5,96 @@ import {
     getSettings,
     getProject,
     updateProject,
-    getSlidesByProject,
-    upsertSlide,
-    markStageCompleted,
-    markStageFailed,
+    createSlide,
+    updateSlide,
+    transitionStage,
 } from "../storage/db.js";
+import SlideSchema from "../schemas/slide.schema.js";
+import { processSlide } from "../pipeline/index.js";
 
 /**
- * Strip surrounding markdown code fences (```html ... ```) from a model response.
- * Models frequently wrap HTML in fences even when instructed not to.
- */
-function stripCodeFences(text) {
-    if (!text) return "";
-    let s = String(text).trim();
-
-    const fenceMatch = s.match(/^```(?:[a-zA-Z0-9]*)?\s*\n?([\s\S]*?)\n?```$/);
-    if (fenceMatch) {
-        s = fenceMatch[1].trim();
-    }
-
-    const leadingFence = s.match(/^```(?:[a-zA-Z0-9]*)?\s*\n([\s\S]*)$/);
-    if (leadingFence && !s.endsWith("```")) {
-        s = leadingFence[1].trim();
-    }
-
-    return s;
-}
-
-/**
- * Strip forbidden document-level tags from a fragment (defensive).
- */
-function stripDocumentTags(html) {
-    let s = String(html);
-    s = s.replace(/<\!doctype[^>]*>/gi, "");
-    s = s.replace(/<\/?(?:html|head|body)[^>]*>/gi, "");
-    return s.trim();
-}
-
-/**
- * Validate and normalize a master template response.
+ * Call the model with structured output, then normalize + validate the
+ * `{ css, html }` result.
  *
- * Required structure:
- *   <style>...</style>
- *   <div class="slide">{{CONTENT}}</div>
+ * On validation failure, makes ONE retry call that explains the error to the
+ * model in the hope it fixes the output. If the retry also fails, the error is
+ * thrown.
  *
- * Returns the normalized HTML string, or throws an error if validation fails.
+ * @param {Object} params
+ * @param {string} params.apiKey
+ * @param {string} params.model
+ * @param {string} params.systemPrompt
+ * @param {string} params.userPrompt
+ * @param {string} params.label - Human-readable label for logging (e.g. "master template", "slide 3").
+ * @returns {Promise<{css: string, html: string}>} Validated slide output.
  */
-function normalizeMasterTemplate(rawHtml) {
-    let html = stripCodeFences(rawHtml);
-    html = stripDocumentTags(html);
+async function generateValidatedSlide({
+    apiKey,
+    model,
+    systemPrompt,
+    userPrompt,
+    label,
+}) {
+    const call = async (prompt) => {
+        const response = await chatCompletion({
+            apiKey,
+            model,
+            systemPrompt,
+            userPrompt: prompt,
+            options: {
+                timeoutMs: 180000,
+                responseFormat: {
+                    type: "json_schema",
+                    jsonSchema: SlideSchema,
+                },
+            },
+        });
 
-    if (!html || html.length < 20) {
-        throw new Error("Master template response was empty or too short.");
-    }
+        const content = response.choices?.[0]?.message?.content;
+        if (!content) {
+            throw new Error("No content returned from model.");
+        }
 
-    if (!html.includes("{{CONTENT}}")) {
-        throw new Error("Master template is missing the {{CONTENT}} placeholder.");
-    }
+        let raw;
+        try {
+            raw = JSON.parse(content);
+        } catch (err) {
+            throw new Error(`Response is not valid JSON: ${err.message}`);
+        }
 
-    const styleMatch = html.match(/<style\b[^>]*>([\s\S]*?)<\/style>/i);
-    if (!styleMatch) {
-        throw new Error("Master template is missing a <style> block.");
-    }
+        return processSlide(raw);
+    };
 
-    const slideMatch = html.match(/<div\s+class\s*=\s*["']slide["'][^>]*>([\s\S]*?)<\/div>\s*$/i);
-    if (!slideMatch) {
-        throw new Error(
-            "Master template must end with <div class=\"slide\">{{CONTENT}}</div>."
+    try {
+        return await call(userPrompt);
+    } catch (firstErr) {
+        console.warn(
+            `[SlidesJob] ${label} validation failed (${firstErr.message}). Retrying once with error feedback...`
         );
+
+        const retryPrompt = `${userPrompt}\n\n---\nYour previous response was rejected for the following reason:\n${firstErr.message}\n\nPlease fix the issue and return a valid JSON object with exactly "css" and "html" keys.`;
+
+        try {
+            return await call(retryPrompt);
+        } catch (retryErr) {
+            const errMsg = `${label} failed after retry: ${retryErr.message}`;
+            console.error(`[SlidesJob] ${errMsg}`);
+            throw new Error(errMsg);
+        }
     }
-
-    if (!html.includes("{{CONTENT}}")) {
-        throw new Error("Master template must contain {{CONTENT}} placeholder.");
-    }
-
-    // Sanity: ensure no script tags or event handlers.
-    if (/<script\b/i.test(html)) {
-        throw new Error("Master template must not contain <script> tags.");
-    }
-
-    return html;
-}
-
-/**
- * Validate and normalize a per-slide response.
- *
- * Required structure:
- *   <style>...</style>
- *   <div ...>...</div>
- *
- * Returns the normalized HTML string, or throws an error if validation fails.
- */
-function normalizeSlideFragment(rawHtml) {
-    let html = stripCodeFences(rawHtml);
-    html = stripDocumentTags(html);
-
-    if (!html || html.length < 10) {
-        throw new Error("Slide response was empty after stripping fences.");
-    }
-
-    if (!/<style\b[^>]*>[\s\S]*?<\/style>/i.test(html)) {
-        throw new Error("Slide response must include a <style> block.");
-    }
-
-    if (!/<div\b[^>]*>[\s\S]*?<\/div>/i.test(html)) {
-        throw new Error("Slide response must include a <div> container.");
-    }
-
-    if (/<script\b/i.test(html)) {
-        throw new Error("Slide response must not contain <script> tags.");
-    }
-
-    return html;
 }
 
 /**
  * Slides Generation Job
  *
  * 1. Re-fetches the design plan from the project row (defensive).
- * 2. Builds a minimal master-template payload (project, globalDesign, masterTemplate plan).
- * 3. Calls the main model -> persists a validated master template with `<style>` + `<div class="slide">{{CONTENT}}</div>`.
- * 4. For each slide, calls the main model with the FULL master template + project + globalDesign + slide plan.
- *    Each slide response must contain `<style>` + `<div>` and is persisted as `html_content`.
- * 5. On success, marks slides_state=completed.
+ * 2. Generates the master template with structured output `{ css, html }`
+ *    and persists it as-is (raw JSON) in `project.master_template`.
+ * 3. For each slide, sends the master template + slide plan to the model.
+ *    The model returns a complete `{ css, html }` slide (master wrapper +
+ *    content together). Each is normalized + validated and persisted as raw
+ *    JSON in `slides.html_content`.
+ * 4. On success, marks slides_state=completed.
  *    On any failure, marks slides_state=failed with the error message.
  */
 export async function generateSlides(data) {
@@ -174,7 +141,7 @@ export async function generateSlides(data) {
         const errMsg =
             "Design plan is missing or empty. Cannot generate slides.";
         console.error(`[SlidesJob] ${errMsg}`);
-        markStageFailed(projectId, "slides", errMsg);
+        transitionStage(projectId, "slides", "failed", errMsg);
         throw new Error(errMsg);
     }
 
@@ -186,7 +153,7 @@ export async function generateSlides(data) {
     if (!apiKey) {
         const errMsg = "OpenRouter API key is not configured in settings.";
         console.error(`[SlidesJob] ${errMsg}`);
-        markStageFailed(projectId, "slides", errMsg);
+        transitionStage(projectId, "slides", "failed", errMsg);
         throw new Error(errMsg);
     }
 
@@ -194,7 +161,7 @@ export async function generateSlides(data) {
     if (!resolvedModel) {
         const errMsg = "Main model is not configured in settings.";
         console.error(`[SlidesJob] ${errMsg}`);
-        markStageFailed(projectId, "slides", errMsg);
+        transitionStage(projectId, "slides", "failed", errMsg);
         throw new Error(errMsg);
     }
 
@@ -212,7 +179,7 @@ export async function generateSlides(data) {
     );
 
     // -----------------------------------------------------------------
-    // 3. Step 1 — generate the master template with a MINIMAL payload.
+    // 3. Step 1 — generate the master template with structured output.
     //    Send only project, globalDesign, and masterTemplate plan.
     //    Do NOT send individual slide content.
     // -----------------------------------------------------------------
@@ -220,6 +187,9 @@ export async function generateSlides(data) {
         project: designPlan.project,
         globalDesign: designPlan.globalDesign,
         masterTemplate: designPlan.masterTemplate,
+        // Include the user's original project description so the master
+        // template stays aligned with the user's intent.
+        userDescription: project.user_desc || "",
     };
 
     let masterTemplate;
@@ -227,36 +197,27 @@ export async function generateSlides(data) {
         console.log(
             `[SlidesJob] Generating master template for project ${projectId} with model ${resolvedModel}...`
         );
-        const masterResponse = await chatCompletion({
+        masterTemplate = await generateValidatedSlide({
             apiKey,
             model: resolvedModel,
             systemPrompt: masterPromptText,
             userPrompt: JSON.stringify(masterUserPayload),
-            options: {
-                timeoutMs: 180000,
-                strictHtml: true,
-            },
+            label: "Master template",
         });
 
-        const masterContent = masterResponse.choices?.[0]?.message?.content;
-        if (!masterContent) {
-            throw new Error("No content returned from model for master template.");
-        }
-
-        masterTemplate = normalizeMasterTemplate(masterContent);
-
         // Persist immediately so partial progress survives mid-loop failures.
-        updateProject(projectId, { master_template: masterTemplate });
+        updateProject(projectId, { master_template: JSON.stringify(masterTemplate) });
     } catch (err) {
         const errMsg = `Master template generation failed: ${err.message}`;
         console.error(`[SlidesJob] ${errMsg}`);
-        markStageFailed(projectId, "slides", errMsg);
+        transitionStage(projectId, "slides", "failed", errMsg);
         throw new Error(errMsg);
     }
 
     // -----------------------------------------------------------------
     // 4. Step 2 — generate each slide.
-    //    Send the FULL master template so the model can see the canvas and styles.
+    //    Send the FULL master template so the model can see the canvas and
+    //    styles. The model returns the complete slide (master + content).
     // -----------------------------------------------------------------
     for (const slidePlan of designPlan.slides) {
         const seqNum = slidePlan.number;
@@ -270,32 +231,38 @@ export async function generateSlides(data) {
                 slide: slidePlan,
                 project: designPlan.project,
                 globalDesign: designPlan.globalDesign,
+                // Include the user's original project description so each
+                // slide's content stays aligned with the user's intent.
+                userDescription: project.user_desc || "",
             });
 
-            const slideResponse = await chatCompletion({
+            const slide = await generateValidatedSlide({
                 apiKey,
                 model: resolvedModel,
                 systemPrompt: slidePromptText,
                 userPrompt,
-                options: {
-                    timeoutMs: 180000,
-                    strictHtml: true,
-                },
+                label: `Slide ${seqNum}`,
             });
 
-            const slideContent = slideResponse.choices?.[0]?.message?.content;
-            if (!slideContent) {
-                throw new Error(
-                    `No content returned from model for slide ${seqNum}.`
-                );
+            const htmlContent = JSON.stringify(slide);
+            // A generated slide has no row yet on the first run. Insert it
+            // through the public createSlide helper, and only update when a
+            // retry is processing a row that already exists.
+            try {
+                createSlide(projectId, seqNum, htmlContent, []);
+            } catch (insertErr) {
+                if (!String(insertErr.message).includes("UNIQUE")) {
+                    throw insertErr;
+                }
+                updateSlide(projectId, seqNum, {
+                    html_content: htmlContent,
+                    images_path: [],
+                });
             }
-
-            const fragment = normalizeSlideFragment(slideContent);
-            upsertSlide(projectId, seqNum, fragment, []);
         } catch (err) {
             const errMsg = `Slide ${seqNum} generation failed: ${err.message}`;
             console.error(`[SlidesJob] ${errMsg}`);
-            markStageFailed(projectId, "slides", errMsg);
+            transitionStage(projectId, "slides", "failed", errMsg);
             throw new Error(errMsg);
         }
     }
@@ -303,6 +270,6 @@ export async function generateSlides(data) {
     // -----------------------------------------------------------------
     // 5. Done.
     // -----------------------------------------------------------------
-    markStageCompleted(projectId, "slides");
+    transitionStage(projectId, "slides", "completed");
     console.log(`[SlidesJob] Completed for project ${projectId}`);
 }

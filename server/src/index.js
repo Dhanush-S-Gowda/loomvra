@@ -7,6 +7,8 @@ import projectRoutes from "./routes/project.routes.js";
 import settingsRoutes from "./routes/settings.routes.js";
 import slidesRoutes from "./routes/slides.routes.js";
 
+import getSupportedModels from "./utils/getSupportedModels.js"
+
 // Start background workers
 import "./workers/design.worker.js";
 import "./workers/slides.worker.js";
@@ -39,6 +41,12 @@ app.use(slidesRoutes);
 // Health check
 app.get("/health", (_req, res) => {
     res.json({ status: "ok", timestamp: new Date().toISOString() });
+});
+
+// Get supported models
+app.get("/models", async (_req, res) => {
+    const models = await getSupportedModels();
+    res.json(models);
 });
 
 // Start server

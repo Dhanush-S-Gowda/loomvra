@@ -1,13 +1,41 @@
 const BASE_URL = "http://localhost:3000";
+export const API_BASE_URL = BASE_URL;
+
+// Design plans created before the server URL fix may contain a frontend-origin
+// image URL (localhost:5173/images/...). Always resolve local image paths to
+// the API server, which owns the /images static route.
+export function resolveImageUrl(src) {
+  if (typeof src !== "string" || !src) return src;
+  try {
+    const url = new URL(src, window.location.origin);
+    if (url.pathname.startsWith("/images/")) {
+      return `${API_BASE_URL}${url.pathname}${url.search}`;
+    }
+    return src;
+  } catch {
+    return src;
+  }
+}
 
 async function request(url, options = {}) {
   const res = await fetch(`${BASE_URL}${url}`, {
     headers: { "Content-Type": "application/json" },
     ...options,
   });
-  const data = await res.json();
+
+  const text = await res.text();
+  let data = null;
+  if (text) {
+    try {
+      data = JSON.parse(text);
+    } catch {
+      // Non-JSON response body (e.g. empty or HTML error page).
+      data = null;
+    }
+  }
+
   if (!res.ok) {
-    throw new Error(data.error || `Request failed with status ${res.status}`);
+    throw new Error(data?.error || `Request failed with status ${res.status}`);
   }
   return data;
 }
@@ -51,9 +79,20 @@ export function retryDesign(projectId) {
   });
 }
 
+/** POST /retry-slides/:id */
+export function retrySlides(projectId) {
+  return request(`/retry-slides/${projectId}`, { method: "POST" });
+}
+
+
 /** POST /start-crafting/:id */
 export function startCrafting(id) {
   return request(`/start-crafting/${id}`, { method: "POST" });
+}
+
+/** GET /models */
+export function getModels() {
+  return request("/models");
 }
 
 /** GET /settings */
@@ -66,5 +105,21 @@ export function updateSettings(body) {
   return request("/settings", {
     method: "PATCH",
     body: JSON.stringify(body),
+  });
+}
+
+/** POST /settings/verify/openrouter */
+export function verifyOpenRouterKey(apiKey) {
+  return request("/settings/verify/openrouter", {
+    method: "POST",
+    body: JSON.stringify({ apiKey }),
+  });
+}
+
+/** POST /settings/verify/pexels */
+export function verifyPexelsKey(apiKey) {
+  return request("/settings/verify/pexels", {
+    method: "POST",
+    body: JSON.stringify({ apiKey }),
   });
 }

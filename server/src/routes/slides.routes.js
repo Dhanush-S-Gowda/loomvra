@@ -1,43 +1,25 @@
 import { Router } from "express";
 import { getProject, getSlidesByProject } from "../storage/db.js";
+import { renderSlide } from "../pipeline/index.js";
 
 const router = Router();
 
 /**
- * Assemble a slide HTML fragment by injecting it into the master's
- * {{CONTENT}} placeholder. Returns an HTML document with boilerplate.
+ * Parse a stored slide (raw `{ css, html }` JSON) from the database.
+ * Returns null if the stored value is missing or invalid.
  */
-function assembleSlideHTML(masterTemplate, slideFragment, slideNumber) {
-    const slideStyleMatch = slideFragment.match(/<style\b[^>]*>[\s\S]*?<\/style>/i);
-    const slideStyle = slideStyleMatch ? slideStyleMatch[0] : "";
-    const slideBodyMatch = slideFragment.match(/<div\b[^>]*>[\s\S]*?<\/div>/i);
-    const slideBody = slideBodyMatch ? slideBodyMatch[0] : "";
-
-    // Combine the master style + slide style, then replace {{CONTENT}}.
-    let slideRoot = masterTemplate;
-    const masterStyleIdx = masterTemplate.search(/<style\b[^>]*>[\s\S]*?<\/style>/i);
-    if (masterStyleIdx >= 0) {
-        const afterStyle = masterTemplate
-            .slice(masterStyleIdx)
-            .replace(/<\/style>/i, "</style>\n" + slideStyle);
-        slideRoot = masterTemplate.slice(0, masterStyleIdx) + afterStyle;
-    } else {
-        slideRoot = slideStyle + "\n" + masterTemplate;
+function parseStoredSlide(raw) {
+    if (!raw) return null;
+    try {
+        const parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed !== "object") return null;
+        if (typeof parsed.css !== "string" || typeof parsed.html !== "string") {
+            return null;
+        }
+        return parsed;
+    } catch {
+        return null;
     }
-
-    slideRoot = slideRoot.replace(/\{\{CONTENT\}\}/g, slideBody);
-
-    return `<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=1280, initial-scale=1.0">
-  <title>Slide ${slideNumber}</title>
-</head>
-<body>
-${slideRoot}
-</body>
-</html>`;
 }
 
 /**
@@ -103,56 +85,25 @@ router.get("/slides/:projectId", (req, res) => {
             });
         }
 
-        if (!project.master_template) {
-            return res.json({
-                projectId: `proj-${projectId}`,
-                state: "slides_failed",
-                error: "Master template is missing. Please retry slide generation.",
-            });
-        }
-
         const slidesData = getSlidesByProject(projectId);
-        const slides = slidesData.map((s) => ({
-            index: s.seq_num,
-            content: assembleSlideHTML(project.master_template, s.html_content, s.seq_num),
-        }));
+        const slides = slidesData
+            .map((s) => {
+                const stored = parseStoredSlide(s.html_content);
+                if (!stored) return null;
+                return {
+                    index: s.seq_num,
+                    content: renderSlide(stored, s.seq_num),
+                };
+            })
+            .filter(Boolean);
 
         return res.json({
             projectId: `proj-${projectId}`,
             state: "generated",
-            masterTemplate: project.master_template,
             slides,
         });
     } catch (err) {
         console.error("[GET /slides/:projectId]", err);
-        return res.status(500).json({ error: err.message });
-    }
-});
-
-/**
- * GET /slides/:projectId/master
- */
-router.get("/slides/:projectId/master", (req, res) => {
-    try {
-        const projectId = req.params.projectId;
-        const project = getProject(projectId);
-
-        if (!project) {
-            return res.status(404).json({ error: "Project not found" });
-        }
-
-        if (!project.master_template) {
-            return res.status(404).json({
-                error: "Master template not yet generated for this project.",
-            });
-        }
-
-        return res.json({
-            projectId: `proj-${projectId}`,
-            masterTemplate: project.master_template,
-        });
-    } catch (err) {
-        console.error("[GET /slides/:projectId/master]", err);
         return res.status(500).json({ error: err.message });
     }
 });
@@ -174,9 +125,9 @@ router.get("/slides/:projectId/slide/:index", (req, res) => {
             return res.status(404).json({ error: "Project not found" });
         }
 
-        if (!project.master_template) {
+        if (project.slides_state !== "completed") {
             return res.status(404).json({
-                error: "Master template not yet generated for this project.",
+                error: "Slides are not yet generated for this project.",
             });
         }
 
@@ -189,10 +140,17 @@ router.get("/slides/:projectId/slide/:index", (req, res) => {
             });
         }
 
+        const stored = parseStoredSlide(slide.html_content);
+        if (!stored) {
+            return res.status(404).json({
+                error: `Slide ${index} content is invalid or missing.`,
+            });
+        }
+
         return res.json({
             projectId: `proj-${projectId}`,
             index: slide.seq_num,
-            content: assembleSlideHTML(project.master_template, slide.html_content, slide.seq_num),
+            content: renderSlide(stored, slide.seq_num),
         });
     } catch (err) {
         console.error("[GET /slides/:projectId/slide/:index]", err);

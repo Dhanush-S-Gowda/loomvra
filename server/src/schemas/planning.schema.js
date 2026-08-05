@@ -168,6 +168,16 @@ const PlanningSchema = {
                 }
               }
             }
+          },
+
+          image: {
+            type: "object",
+            additionalProperties: false,
+            required: ["src"],
+            properties: {
+              src: { type: "string" },
+              purpose: { type: "string" }
+            }
           }
         }
       },

@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router';
 import { toast } from "sonner";
-import { startCrafting } from '@/lib/api';
+import { startCrafting, updateProject as saveProject, resolveImageUrl } from '@/lib/api';
 import { Loader2 } from 'lucide-react';
 import {
   Card,
@@ -134,6 +134,8 @@ function DesignPlan({ data, projectId }) {
   const [crafting, setCrafting] = useState(false);
   const navigate = useNavigate();
 
+  const [saving, setSaving] = useState(false);
+
   const startEdit = (section) => {
     setEditingSection(section);
   };
@@ -144,8 +146,26 @@ function DesignPlan({ data, projectId }) {
     setSlides(data.slides);
   };
 
-  const saveEdit = () => {
+  const saveEdit = async () => {
     setEditingSection(null);
+    if (!projectId) {
+      toast.error("Project ID is missing");
+      return;
+    }
+    setSaving(true);
+    try {
+      // Merge the edited slides back into the plan before persisting.
+      const payload = { ...plan, slides };
+      const result = await saveProject(projectId, { design_plan: payload });
+      // Reflect the server's canonical (image-persisted) plan back into state.
+      setPlan(result);
+      setSlides(result.slides);
+      toast.success("Design plan saved");
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const updateProject = useCallback((field, value) => {
@@ -168,6 +188,29 @@ function DesignPlan({ data, projectId }) {
     });
   }, []);
 
+  const addPersistentElement = useCallback(() => {
+    setPlan((prev) => ({
+      ...prev,
+      masterTemplate: {
+        ...prev.masterTemplate,
+        persistentElements: [
+          ...(prev.masterTemplate.persistentElements || []),
+          { type: '', position: '' },
+        ],
+      },
+    }));
+  }, []);
+
+  const removePersistentElement = useCallback((index) => {
+    setPlan((prev) => ({
+      ...prev,
+      masterTemplate: {
+        ...prev.masterTemplate,
+        persistentElements: (prev.masterTemplate.persistentElements || []).filter((_, i) => i !== index),
+      },
+    }));
+  }, []);
+
   const updateSlide = useCallback((slideNumber, field, value) => {
     setSlides((prev) =>
       prev.map((s) => (s.number === slideNumber ? { ...s, [field]: value } : s))
@@ -179,7 +222,12 @@ function DesignPlan({ data, projectId }) {
       prev.map((s) => {
         if (s.number !== slideNumber) return s;
         const newImages = [...s.images];
-        newImages[imgIndex] = value;
+        const existing = newImages[imgIndex];
+        // Images are stored as objects ({ src, ... }) on the server.
+        newImages[imgIndex] =
+          existing && typeof existing === "object"
+            ? { ...existing, src: value }
+            : { src: value };
         return { ...s, images: newImages };
       })
     );
@@ -200,20 +248,38 @@ function DesignPlan({ data, projectId }) {
     setImagePickerOpen(true);
   }, []);
 
-  const handleImageSelect = useCallback((imageUrl) => {
+  const openMasterImagePicker = useCallback(() => {
+    setImagePickerTarget({ master: true });
+    setImagePickerOpen(true);
+  }, []);
+
+  const handleImageSelect = useCallback((image) => {
     if (!imagePickerTarget) return;
-    const { slideNumber, imgIndex } = imagePickerTarget;
-    if (imgIndex !== null) {
-      updateSlideImage(slideNumber, imgIndex, imageUrl);
+    const { slideNumber, imgIndex, master } = imagePickerTarget;
+    const imageData = typeof image === 'string' ? { src: image } : image;
+    if (master) {
+      updateMasterTemplate('image', imageData);
+    } else if (imgIndex !== null) {
+      updateSlideImage(slideNumber, imgIndex, imageData.src);
     } else {
       setSlides((prev) =>
         prev.map((s) =>
-          s.number === slideNumber ? { ...s, images: [...s.images, imageUrl] } : s
+          s.number === slideNumber
+            ? { ...s, images: [...s.images, imageData] }
+            : s
         )
       );
     }
     setImagePickerTarget(null);
   }, [imagePickerTarget, updateSlideImage]);
+
+  const removeMasterImage = useCallback(() => {
+    setPlan((prev) => {
+      const nextMaster = { ...prev.masterTemplate };
+      delete nextMaster.image;
+      return { ...prev, masterTemplate: nextMaster };
+    });
+  }, []);
 
   const handleDeleteConfirm = () => {
     if (slideToDelete !== null) {
@@ -256,7 +322,7 @@ function DesignPlan({ data, projectId }) {
           size="lg"
           className="gap-2 rounded-md"
           onClick={handleStartCrafting}
-          disabled={crafting}
+          disabled={crafting || saving}
         >
           {crafting ? (
             <>
@@ -579,7 +645,7 @@ function DesignPlan({ data, projectId }) {
             <div className="pt-3 border-t border-border/60">
               <p className="text-xs uppercase tracking-wider text-muted-foreground mb-2">Persistent Elements</p>
               <div className="space-y-2">
-                {masterTemplate.persistentElements.map((el, idx) => (
+                {(masterTemplate.persistentElements || []).map((el, idx) => (
                   <div key={idx} className="flex items-center gap-3">
                     {isEditingMasterTemplate ? (
                       <>
@@ -589,6 +655,9 @@ function DesignPlan({ data, projectId }) {
                           className="text-sm flex-1"
                           placeholder="Type"
                         />
+                        <Button variant="ghost" size="icon-sm" onClick={() => removePersistentElement(idx)} aria-label="Remove persistent element">
+                          <Trash2 className="size-4 text-destructive" />
+                        </Button>
                         <span className="text-muted-foreground">—</span>
                         <Input
                           value={el.position}
@@ -605,7 +674,30 @@ function DesignPlan({ data, projectId }) {
                     )}
                   </div>
                 ))}
+                {isEditingMasterTemplate && (
+                  <Button variant="outline" size="sm" className="gap-2" onClick={addPersistentElement}>
+                    <Plus className="size-4" /> Add persistent element
+                  </Button>
+                )}
               </div>
+            </div>
+            <div className="pt-3 border-t border-border/60">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs uppercase tracking-wider text-muted-foreground">Master Template Image (optional, max 1)</p>
+                {isEditingMasterTemplate && masterTemplate.image && (
+                  <Button variant="ghost" size="sm" onClick={removeMasterImage} className="gap-2 text-destructive">
+                    <Trash2 className="size-4" /> Remove
+                  </Button>
+                )}
+              </div>
+              {masterTemplate.image?.src ? (
+                <img src={resolveImageUrl(masterTemplate.image.src)} alt={masterTemplate.image.purpose || 'Master template'} className="max-h-32 rounded-md object-contain" />
+              ) : <p className="text-sm text-muted-foreground italic">No image selected</p>}
+              {isEditingMasterTemplate && !masterTemplate.image?.src && (
+                <Button variant="outline" size="sm" className="mt-2 gap-2" onClick={openMasterImagePicker}>
+                  <ImageIcon className="size-4" /> Add image
+                </Button>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -810,7 +902,11 @@ function DesignPlan({ data, projectId }) {
                     </div>
                     {slide.images.length > 0 ? (
                       <div className="flex flex-wrap gap-3">
-                        {slide.images.map((img, idx) => (
+                        {slide.images.map((img, idx) => {
+                          const src =
+                            img && typeof img === "object" ? img.src : img;
+                          const imageUrl = resolveImageUrl(src);
+                          return (
                           <div key={idx} className="relative group">
                             <Dialog
                               open={imageDialog === `${slide.number}-${idx}`}
@@ -824,7 +920,7 @@ function DesignPlan({ data, projectId }) {
                                   onClick={() => setImageDialog(`${slide.number}-${idx}`)}
                                 >
                                   <img
-                                    src={img}
+                                    src={imageUrl}
                                     alt={`Slide ${slide.number} image ${idx + 1}`}
                                     className="h-24 w-32 object-cover rounded-lg"
                                     loading="lazy"
@@ -838,7 +934,7 @@ function DesignPlan({ data, projectId }) {
                                 </DialogHeader>
                                 <div className="flex justify-center">
                                   <img
-                                    src={img}
+                                    src={imageUrl}
                                     alt={`Slide ${slide.number} image ${idx + 1}`}
                                     className="max-h-[70vh] max-w-[75vw] rounded-lg object-contain"
                                   />
@@ -862,7 +958,8 @@ function DesignPlan({ data, projectId }) {
                               </DialogContent>
                             </Dialog>
                           </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     ) : (
                       <p className="text-sm text-muted-foreground italic">No images</p>

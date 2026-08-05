@@ -77,9 +77,7 @@ export function transitionStage(projectId, stage, toState, errorValue = null) {
   const stateCol = stage === "design" ? "design_state" : "slides_state";
   const errCol = stage === "design" ? "design_error" : "slides_error";
   
-  const sql = `UPDATE project SET ${stateCol} = ?${
-    errorValue !== null ? `, ${errCol} = ?` : ""
-  } WHERE id = ?`;
+  const sql = `UPDATE project SET ${stateCol} = ?, ${errCol} = ? WHERE id = ?`;
   const params = [toState, errorValue, projectId];
 
   const result = db.prepare(sql).run(...params);
@@ -182,20 +180,20 @@ export function getSlidesByProject(projectId) {
   }));
 }
 
-// export function updateSlide(id, data) {
-//   const allowed = ["html_content", "images_path"];
-//   const sets = [];
-//   const vals = [];
-//   for (const key of allowed) {
-//     if (data[key] !== undefined) {
-//       sets.push(`${key} = ?`);
-//       vals.push(key === "images_path" ? JSON.stringify(data[key]) : data[key]);
-//     }
-//   }
-//   if (sets.length === 0) return;
-//   vals.push(id);
-//   db.prepare(`UPDATE slides SET ${sets.join(", ")} WHERE id = ?`).run(...vals);
-// }
+export function updateSlide(projectId, seqNum, data) {
+  const allowed = ["html_content", "images_path"];
+  const sets = [];
+  const vals = [];
+  for (const key of allowed) {
+    if (data[key] !== undefined) {
+      sets.push(`${key} = ?`);
+      vals.push(key === "images_path" ? JSON.stringify(data[key]) : data[key]);
+    }
+  }
+  if (sets.length === 0) return;
+  vals.push(projectId, seqNum);
+  db.prepare(`UPDATE slides SET ${sets.join(", ")} WHERE project_id = ? AND seq_num = ?`).run(...vals);
+}
 
 // export function upsertSlide(projectId, seqNum, htmlContent, imagesPath = []) {
 //   const existing = db

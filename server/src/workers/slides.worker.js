@@ -1,12 +1,19 @@
 import { Worker } from "bullmq";
 import connection from "../config/redis.js";
 import { generateSlides } from "../jobs/slides.job.js";
+import { transitionStage } from "../storage/db.js";
 
 const worker = new Worker(
     "slides-generation",
     async (job) => {
         console.log(`[SlidesWorker] Processing job ${job.id} for project ${job.data.projectId}`);
-        await generateSlides(job.data);
+        try {
+            await generateSlides(job.data);
+        } catch (err) {
+            console.error(`[SlidesWorker] Job ${job?.id} failed:`, err?.message || err);
+            transitionStage(job.data.projectId, "slides", "failed", err?.message || err);
+            throw err;
+        }
     },
     {
         connection,
