@@ -8,9 +8,10 @@ import {
     createSlide,
     updateSlide,
     transitionStage,
+    updateProgress,
 } from "../storage/db.js";
 import SlideSchema from "../schemas/slide.schema.js";
-import { processSlide } from "../pipeline/index.js";
+import { processSlide, composeSlideOutput, assertRenderedSlide } from "../pipeline/index.js";
 
 /**
  * Call the model with structured output, then normalize + validate the
@@ -34,6 +35,8 @@ async function generateValidatedSlide({
     systemPrompt,
     userPrompt,
     label,
+    onChunk,
+    masterTemplate,
 }) {
     const call = async (prompt) => {
         const response = await chatCompletion({
@@ -42,7 +45,9 @@ async function generateValidatedSlide({
             systemPrompt,
             userPrompt: prompt,
             options: {
-                timeoutMs: 180000,
+                stream: true,
+                timeoutMs: Number.parseInt(process.env.OPENROUTER_TIMEOUT_MS || "900000", 10),
+                onChunk,
                 responseFormat: {
                     type: "json_schema",
                     jsonSchema: SlideSchema,
@@ -62,7 +67,10 @@ async function generateValidatedSlide({
             throw new Error(`Response is not valid JSON: ${err.message}`);
         }
 
-        return processSlide(raw);
+        const validated = processSlide(raw);
+        const composed = masterTemplate ? processSlide(composeSlideOutput(validated, masterTemplate)) : validated;
+        if (masterTemplate) await assertRenderedSlide(composed, label);
+        return composed;
     };
 
     try {
@@ -101,6 +109,7 @@ export async function generateSlides(data) {
     const { projectId } = data;
 
     console.log(`[SlidesJob] Starting for project ${projectId}...`);
+    updateProgress(projectId, 5, "Preparing slide generation");
 
     // -----------------------------------------------------------------
     // 0. Defensive: re-fetch the project and verify the design plan.
@@ -197,14 +206,21 @@ export async function generateSlides(data) {
         console.log(
             `[SlidesJob] Generating master template for project ${projectId} with model ${resolvedModel}...`
         );
+        updateProgress(projectId, 10, "Generating master template");
         masterTemplate = await generateValidatedSlide({
             apiKey,
             model: resolvedModel,
             systemPrompt: masterPromptText,
             userPrompt: JSON.stringify(masterUserPayload),
             label: "Master template",
+            onChunk: ({ contentLength }) => {
+                if (contentLength % 1000 < 100) {
+                    updateProgress(projectId, 10, "AI is generating the master template");
+                }
+            },
         });
 
+        await assertRenderedSlide(masterTemplate, "master template");
         // Persist immediately so partial progress survives mid-loop failures.
         updateProject(projectId, { master_template: JSON.stringify(masterTemplate) });
     } catch (err) {
@@ -219,8 +235,10 @@ export async function generateSlides(data) {
     //    Send the FULL master template so the model can see the canvas and
     //    styles. The model returns the complete slide (master + content).
     // -----------------------------------------------------------------
-    for (const slidePlan of designPlan.slides) {
+    for (const [index, slidePlan] of designPlan.slides.entries()) {
         const seqNum = slidePlan.number;
+        const slideProgress = 20 + Math.round((index / designPlan.slides.length) * 75);
+        updateProgress(projectId, slideProgress, `Generating slide ${index + 1} of ${designPlan.slides.length}`);
         console.log(
             `[SlidesJob] Generating slide ${seqNum} for project ${projectId}...`
         );
@@ -242,6 +260,11 @@ export async function generateSlides(data) {
                 systemPrompt: slidePromptText,
                 userPrompt,
                 label: `Slide ${seqNum}`,
+                onChunk: ({ contentLength }) => {
+                    if (contentLength % 1000 < 100) {
+                        updateProgress(projectId, slideProgress, `AI is generating slide ${index + 1} of ${designPlan.slides.length}`);
+                    }
+                },
             });
 
             const htmlContent = JSON.stringify(slide);
@@ -270,6 +293,7 @@ export async function generateSlides(data) {
     // -----------------------------------------------------------------
     // 5. Done.
     // -----------------------------------------------------------------
+    updateProgress(projectId, 100, "Slides ready");
     transitionStage(projectId, "slides", "completed");
     console.log(`[SlidesJob] Completed for project ${projectId}`);
 }

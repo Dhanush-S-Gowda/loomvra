@@ -47,6 +47,22 @@ db.exec(`
   );
 `);
 
+// Enforce title uniqueness at the database boundary as well as in the route.
+// The normalized expression keeps "Demo" and " demo " from colliding later.
+db.exec("CREATE UNIQUE INDEX IF NOT EXISTS project_name_unique ON project(lower(trim(name)))");
+
+// Progress columns are additive so existing SQLite databases migrate safely.
+for (const statement of [
+  "ALTER TABLE project ADD COLUMN progress INTEGER DEFAULT 0",
+  "ALTER TABLE project ADD COLUMN progress_message TEXT DEFAULT NULL",
+]) {
+  try {
+    db.exec(statement);
+  } catch (err) {
+    if (!String(err.message).includes("duplicate column name")) throw err;
+  }
+}
+
 // Singleton settings row
 db.prepare(`
   INSERT OR IGNORE INTO settings (id, openrouter_api, pexel_api, design_model, main_model, small_model)
@@ -61,6 +77,8 @@ const PROJECT_WRITABLE_COLUMNS = new Set([
   "design_error",
   "slides_error",
   "master_template",
+  "progress",
+  "progress_message",
 ]);
 
 const ALLOWED_STATES = ["pending", "processing", "completed", "failed"];
@@ -69,6 +87,13 @@ function ensureState(value) {
   if (!ALLOWED_STATES.includes(value)) {
     throw new Error(`Invalid state: ${value}`);
   }
+}
+
+export function updateProgress(projectId, progress, message = null) {
+  const bounded = Math.max(0, Math.min(100, Math.round(Number(progress) || 0)));
+  db.prepare("UPDATE project SET progress = ?, progress_message = ? WHERE id = ?")
+    .run(bounded, message, projectId);
+  return getProject(projectId);
 }
 
 export function transitionStage(projectId, stage, toState, errorValue = null) {
@@ -117,9 +142,16 @@ export function updateSettings(data) {
 }
 
 // ----- Project helpers -----
-export function checkProjectNameExists(name) {
-  const stmt = db.prepare("SELECT * FROM project WHERE name = ?");
-  return stmt.get(name) !== undefined;
+export function checkProjectNameExists(name, excludeId = null) {
+  const normalized = String(name ?? "").trim();
+  if (!normalized) return false;
+  const query = excludeId == null
+    ? "SELECT 1 FROM project WHERE lower(trim(name)) = lower(?) LIMIT 1"
+    : "SELECT 1 FROM project WHERE lower(trim(name)) = lower(?) AND id <> ? LIMIT 1";
+  const row = excludeId == null
+    ? db.prepare(query).get(normalized)
+    : db.prepare(query).get(normalized, excludeId);
+  return row !== undefined;
 }
 
 export function createProject(name, userDesc) {
@@ -140,6 +172,18 @@ export function getAllProjects(page = 1, pageSize = 10) {
       `SELECT id, name FROM project ORDER BY created_at DESC LIMIT ? OFFSET ?`
     )
     .all(pageSize, (page - 1) * pageSize);
+}
+
+export function renameProject(id, name) {
+  const normalized = String(name ?? "").trim();
+  if (!normalized) throw new Error("Project name is required.");
+  if (checkProjectNameExists(normalized, id)) {
+    const error = new Error("Project name already exists. Try a different name.");
+    error.code = "PROJECT_NAME_EXISTS";
+    throw error;
+  }
+  const result = db.prepare("UPDATE project SET name = ? WHERE id = ?").run(normalized, id);
+  return result.changes ? getProject(id) : null;
 }
 
 export function updateProject(id, data) {

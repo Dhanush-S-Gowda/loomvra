@@ -1,6 +1,8 @@
 import normalizeSlideOutput from "./slideNormalizer.js";
 import validateSlideOutput from "./slideValidator.js";
 import renderSlide from "./slideRenderer.js";
+import composeSlideOutput from "./slideComposer.js";
+import assertRenderedSlide from "./renderValidator.js";
 
 /**
  * Slide Pipeline
@@ -32,9 +34,9 @@ export function processSlide(raw) {
  * @param {number} [slideNumber] - Optional slide number for the <title>.
  * @returns {string} A complete HTML document string.
  */
-export function processAndRender(raw, slideNumber) {
-  const slide = processSlide(raw);
+export function processAndRender(raw, slideNumber, masterTemplate) {
+  const slide = masterTemplate ? composeSlideOutput(raw, masterTemplate) : processSlide(raw);
   return renderSlide(slide, slideNumber);
 }
 
-export { normalizeSlideOutput, validateSlideOutput, renderSlide };
+export { normalizeSlideOutput, validateSlideOutput, renderSlide, composeSlideOutput, assertRenderedSlide };

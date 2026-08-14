@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
-import { InfoIcon, Loader2 } from "lucide-react";
+import { Eye, EyeOff, InfoIcon, Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -124,6 +124,8 @@ function Setting() {
   const [verifying, setVerifying] = useState(null); // "openrouter" | "pexels" | null
   const [openRouterVerified, setOpenRouterVerified] = useState(false);
   const [pexelsVerified, setPexelsVerified] = useState(false);
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [showPexelApiKey, setShowPexelApiKey] = useState(false);
 
   // Fetch settings and supported models on mount
   useEffect(() => {
@@ -245,8 +247,11 @@ function Setting() {
     <TooltipProvider>
       <div className="flex flex-col gap-6 p-6 max-w-2xl">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
-          <p className="text-muted-foreground">
+          <p className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.22em] text-primary">
+            <span className="size-2 rounded-full bg-primary" /> Workspace
+          </p>
+          <h1 className="font-heading text-4xl font-medium tracking-tight">Settings</h1>
+          <p className="mt-2 text-muted-foreground">
             Manage your OpenRouter configuration and model preferences.
           </p>
         </div>
@@ -263,13 +268,29 @@ function Setting() {
             <div className="flex flex-col gap-2">
               <label className="text-sm font-medium">OpenRouter API Key</label>
               <div className="flex gap-2">
-                <Input
-                  type="password"
-                  placeholder="sk-or-..."
-                  value={apiKey}
-                  onChange={(e) => setApiKey(e.target.value)}
-                  className="flex-1"
-                />
+                <div className="relative flex-1">
+                  <Input
+                    type={showApiKey ? "text" : "password"}
+                    placeholder="sk-or-..."
+                    value={apiKey}
+                    onChange={(e) => setApiKey(e.target.value)}
+                    className="pr-10"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="absolute right-0 top-0 h-full px-3 text-muted-foreground hover:text-foreground"
+                    onClick={() => setShowApiKey((prev) => !prev)}
+                    aria-label={showApiKey ? "Hide OpenRouter API key" : "Show OpenRouter API key"}
+                  >
+                    {showApiKey ? (
+                      <EyeOff className="h-4 w-4" />
+                    ) : (
+                      <Eye className="h-4 w-4" />
+                    )}
+                  </Button>
+                </div>
                 <Button
                   onClick={handleVerifyApiKey}
                   disabled={verifying === "openrouter"}
@@ -282,7 +303,7 @@ function Setting() {
                 </Button>
               </div>
               {openRouterVerified && (
-                <p className="text-sm text-green-600">
+                <p className="text-sm text-primary">
                   ✓ OpenRouter API key verified
                 </p>
               )}
@@ -291,13 +312,29 @@ function Setting() {
             <div className="flex flex-col gap-2">
               <label className="text-sm font-medium">Pexels API Key</label>
               <div className="flex gap-2">
-                <Input
-                  type="password"
-                  placeholder="Pexels API key"
-                  value={pexelApiKey}
-                  onChange={(e) => setPexelApiKey(e.target.value)}
-                  className="flex-1"
-                />
+                <div className="relative flex-1">
+                  <Input
+                    type={showPexelApiKey ? "text" : "password"}
+                    placeholder="Pexels API key"
+                    value={pexelApiKey}
+                    onChange={(e) => setPexelApiKey(e.target.value)}
+                    className="pr-10"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="absolute right-0 top-0 h-full px-3 text-muted-foreground hover:text-foreground"
+                    onClick={() => setShowPexelApiKey((prev) => !prev)}
+                    aria-label={showPexelApiKey ? "Hide Pexels API key" : "Show Pexels API key"}
+                  >
+                    {showPexelApiKey ? (
+                      <EyeOff className="h-4 w-4" />
+                    ) : (
+                      <Eye className="h-4 w-4" />
+                    )}
+                  </Button>
+                </div>
                 <Button
                   onClick={handleVerifyPexelApiKey}
                   disabled={verifying === "pexels"}
@@ -310,7 +347,7 @@ function Setting() {
                 </Button>
               </div>
               {pexelsVerified && (
-                <p className="text-sm text-green-600">
+                <p className="text-sm text-primary">
                   ✓ Pexels API key verified
                 </p>
               )}

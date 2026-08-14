@@ -3,7 +3,8 @@ import { searchImage } from "../services/pexels.js";
 import {
   getSettings,
   updateProject,
-  transitionStage
+  transitionStage,
+  updateProgress
 } from "../storage/db.js";
 import fs from "fs";
 import path from "path";
@@ -14,6 +15,7 @@ export async function generateDesignPlan(data) {
   const { projectId, userInput, model } = data;
 
   console.log(`[DesignJob] Starting for project ${projectId}...`);
+  updateProgress(projectId, 5, "Preparing design plan");
 
   const settings = getSettings();
   const apiKey = settings?.openrouter_api;
@@ -38,6 +40,7 @@ export async function generateDesignPlan(data) {
   const systemPrompt = fs.readFileSync(planPath, "utf-8");
 
   console.log(`[DesignJob] Calling OpenRouter for project ${projectId} with model ${resolvedModel}...`);
+  updateProgress(projectId, 15, "Generating design plan with AI");
   let response;
   try {
       response = await chatCompletion({
@@ -50,7 +53,15 @@ export async function generateDesignPlan(data) {
                   type: "json_schema",
                   jsonSchema: PlanningSchema,
               },
-              timeoutMs: 120000,
+              stream: true,
+              timeoutMs: Number.parseInt(process.env.OPENROUTER_TIMEOUT_MS || "900000", 10),
+              onChunk: ({ contentLength }) => {
+                  // A streamed chunk is also a liveness signal. Keep the UI
+                  // informed without pretending token count is completion %.
+                  if (contentLength % 1000 < 100) {
+                      updateProgress(projectId, 15, "AI is still generating the design plan");
+                  }
+              },
           },
       });
   } catch (err) {
@@ -87,6 +98,7 @@ export async function generateDesignPlan(data) {
   }
   designPlan = parsed.data;
 
+  updateProgress(projectId, 65, "Finding images for the design plan");
   if (designPlan.slides && Array.isArray(designPlan.slides)) {
       for (const slide of designPlan.slides) {
           if (slide.images && Array.isArray(slide.images)) {
@@ -114,11 +126,13 @@ export async function generateDesignPlan(data) {
       }
   }
 
+  updateProgress(projectId, 90, "Saving design plan");
   updateProject(projectId, {
       design_plan: JSON.stringify(designPlan),
       design_error: null,
   });
 
+  updateProgress(projectId, 100, "Design plan ready");
   const completed = transitionStage(projectId, "design", "completed");
   if (!completed) {
       console.warn(

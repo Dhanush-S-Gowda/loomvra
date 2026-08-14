@@ -315,9 +315,14 @@ function DesignPlan({ data, projectId }) {
     <div className="space-y-10 p-6 md:p-10 max-w-6xl mx-auto h-full overflow-y-auto scrollbar-none [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h1 className="font-serif text-4xl md:text-5xl font-medium tracking-tight">
-          Design Plan
-        </h1>
+        <div>
+          <p className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.22em] text-primary">
+            <span className="size-2 rounded-full bg-primary" /> Design Plan
+          </p>
+          <h1 className="font-heading text-4xl md:text-5xl font-medium tracking-tight">
+            Craft your deck
+          </h1>
+        </div>
         <Button
           size="lg"
           className="gap-2 rounded-md"
@@ -342,7 +347,7 @@ function DesignPlan({ data, projectId }) {
       <section className="space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <FileText className="size-5 text-muted-foreground" />
+            <FileText className="size-5 text-primary" />
             <h2 className="font-heading text-xl font-medium">Project</h2>
           </div>
           {isEditingProject ? (
@@ -407,7 +412,7 @@ function DesignPlan({ data, projectId }) {
       <section className="space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Palette className="size-5 text-muted-foreground" />
+            <Palette className="size-5 text-primary" />
             <h2 className="font-heading text-xl font-medium">Global Design</h2>
           </div>
           {isEditingGlobalDesign ? (
@@ -607,7 +612,7 @@ function DesignPlan({ data, projectId }) {
       <section className="space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <LayoutTemplate className="size-5 text-muted-foreground" />
+            <LayoutTemplate className="size-5 text-primary" />
             <h2 className="font-heading text-xl font-medium">Master Template</h2>
           </div>
           {isEditingMasterTemplate ? (
@@ -707,7 +712,7 @@ function DesignPlan({ data, projectId }) {
       <section className="space-y-5">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <ImageIcon className="size-5 text-muted-foreground" />
+            <ImageIcon className="size-5 text-primary" />
             <h2 className="font-heading text-xl font-medium">Slides</h2>
           </div>
           <span className="text-sm text-muted-foreground">

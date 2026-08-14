@@ -83,7 +83,7 @@
     --popover: oklch(1 0 0);
     --popover-foreground: oklch(0.145 0 0);
     --primary: hsl(25 95% 45%);
-    --primary-foreground: oklch(0.985 0 0);
+    --primary-foreground: oklch(0.205 0 0);
     --secondary: oklch(0.97 0 0);
     --secondary-foreground: oklch(0.205 0 0);
     --muted: oklch(0.97 0 0);
@@ -93,7 +93,7 @@
     --destructive: oklch(0.577 0.245 27.325);
     --border: oklch(0.922 0 0);
     --input: oklch(0.922 0 0);
-    --ring: oklch(0.708 0 0);
+    --ring: hsl(25 95% 45%);
     --chart-1: oklch(0.87 0 0);
     --chart-2: oklch(0.556 0 0);
     --chart-3: oklch(0.439 0 0);
@@ -102,7 +102,7 @@
     --radius: 0.625rem;
     --sidebar: oklch(0.985 0 0);
     --sidebar-foreground: oklch(0.145 0 0);
-    --sidebar-primary: oklch(0.205 0 0);
+    --sidebar-primary: hsl(25 95% 45%);
     --sidebar-primary-foreground: oklch(0.985 0 0);
     --sidebar-accent: hsl(25 95% 53% / 0.12);
     --sidebar-accent-foreground: hsl(25 95% 45%);
@@ -127,8 +127,8 @@
     --card-foreground: oklch(0.985 0 0);
     --popover: oklch(0.205 0 0);
     --popover-foreground: oklch(0.985 0 0);
-    --primary: hwb(25 13% 0%);
-    --primary-foreground: oklch(0.205 0 0);
+    --primary: hsl(25 95% 55%);
+    --primary-foreground: oklch(0.985 0 0);
     --secondary: oklch(0.269 0 0);
     --secondary-foreground: oklch(0.985 0 0);
     --muted: oklch(0.269 0 0);
@@ -138,7 +138,7 @@
     --destructive: oklch(0.704 0.191 22.216);
     --border: oklch(1 0 0 / 10%);
     --input: oklch(1 0 0 / 15%);
-    --ring: oklch(0.556 0 0);
+    --ring: hsl(25 95% 53%);
     --chart-1: oklch(0.87 0 0);
     --chart-2: oklch(0.556 0 0);
     --chart-3: oklch(0.439 0 0);
@@ -146,7 +146,7 @@
     --chart-5: oklch(0.269 0 0);
     --sidebar: oklch(0.205 0 0);
     --sidebar-foreground: oklch(0.985 0 0);
-    --sidebar-primary: oklch(0.488 0.243 264.376);
+    --sidebar-primary: hsl(25 95% 53%);
     --sidebar-primary-foreground: oklch(0.985 0 0);
     --sidebar-accent: hsl(25 80% 45% / 0.18);
     --sidebar-accent-foreground: hsl(25 95% 60%);
@@ -174,4 +174,9 @@
   html {
     @apply font-sans;
     }
+}
+
+/* Film-grain overlay — kept in CSS so the data URL never hits the JSX parser */
+.bg-noise {
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
 }

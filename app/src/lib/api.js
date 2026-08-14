@@ -53,6 +53,29 @@ export function createProject(name, userDesc) {
   });
 }
 
+/** Download a generated project export. */
+export async function downloadProjectExport(id, format) {
+  const response = await fetch(`${API_BASE_URL}/project/${id}/export/${format}`);
+  if (!response.ok) {
+    let message = `Export failed (${response.status})`;
+    try {
+      message = (await response.json()).error || message;
+    } catch {
+      // Keep the status-based fallback when the server did not return JSON.
+    }
+    throw new Error(message);
+  }
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = `presentation.${format}`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}
+
 /** GET /project/:id */
 export function getProject(id) {
   return request(`/project/${id}`);
@@ -63,6 +86,14 @@ export function updateProject(id, body) {
   return request(`/project/${id}`, {
     method: "PATCH",
     body: JSON.stringify(body),
+  });
+}
+
+/** PATCH /project/:id/title */
+export function renameProject(id, title) {
+  return request(`/project/${id}/title`, {
+    method: "PATCH",
+    body: JSON.stringify({ title }),
   });
 }
 

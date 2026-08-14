@@ -3,12 +3,7 @@ import { useNavigate } from 'react-router';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
-import { ArrowRight, CircleQuestionMark, Loader2 } from 'lucide-react';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip"
+import { ArrowRight, Loader2 } from 'lucide-react';
 import { toast } from "sonner";
 import { createProject } from '@/lib/api';
 
@@ -42,140 +37,86 @@ function NewProject() {
 
   return (
     <form onSubmit={handleSubmit} className="relative min-h-screen w-full overflow-hidden">
-      {/* Base background */}
-      <div className="absolute inset-0 bg-background" />
+      {/* Base background — same brand language as the home page */}
+      <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
+        <div className="absolute -left-24 -top-28 size-96 rounded-full bg-[radial-gradient(circle,var(--blob-coral),transparent_68%)] opacity-30 blur-3xl dark:opacity-20" />
+        <div className="absolute right-[-9rem] top-28 size-[32rem] rounded-full bg-[radial-gradient(circle,var(--blob-purple),transparent_68%)] opacity-25 blur-3xl dark:opacity-15" />
+        <div className="absolute bottom-[-15rem] left-1/3 size-[34rem] rounded-full bg-[radial-gradient(circle,var(--blob-teal),transparent_68%)] opacity-20 blur-3xl dark:opacity-12" />
+        <div className="bg-noise absolute inset-0 opacity-[0.035]" />
+      </div>
 
-      {/* Grainy textured overlay - stronger */}
-      <div
-        className="absolute inset-0 opacity-40 dark:opacity-30"
-        style={{
-          backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='5' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")`,
-          backgroundRepeat: 'repeat',
-          backgroundSize: '256px 256px',
-          mixBlendMode: 'overlay',
-        }}
-      />
+      {/* Single, focused composer column — left aligned like a document */}
+      <div className="relative z-10 mx-auto flex min-h-screen max-w-2xl flex-col justify-center px-6 py-16">
+        {/* Eyebrow + heading reuse the home page's exact voice */}
+        <p className="mb-5 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.22em] text-primary">
+          <span className="size-2 rounded-full bg-primary" /> New project
+        </p>
+        <h1 className="font-heading text-5xl leading-[0.95] tracking-tight sm:text-6xl">
+          Describe what you want to <span className="text-primary">say.</span>
+        </h1>
+        <p className="mt-5 max-w-md text-base leading-7 text-muted-foreground">
+          Give it a name and a short brief. We'll turn the direction into a story, then a deck you can edit.
+        </p>
 
-      {/* Gradient blobs - positioned behind content */}
-      <div
-        className="absolute -top-32 -left-32 w-150 h-150 rounded-full blur-[140px] opacity-60 dark:opacity-45"
-        style={{
-          background: 'radial-gradient(circle, var(--blob-coral) 0%, transparent 70%)',
-        }}
-      />
-      <div
-        className="absolute -top-20 -right-32 w-137.5 h-137.5 rounded-full blur-[130px] opacity-55 dark:opacity-40"
-        style={{
-          background: 'radial-gradient(circle, var(--blob-purple) 0%, transparent 70%)',
-        }}
-      />
-      <div
-        className="absolute -bottom-20 -right-20 w-125 h-125 rounded-full blur-[140px] opacity-50 dark:opacity-35"
-        style={{
-          background: 'radial-gradient(circle, var(--blob-teal) 0%, transparent 70%)',
-        }}
-      />
-      <div
-        className="absolute -bottom-32 -left-20 w-112.5 h-112.5 rounded-full blur-[120px] opacity-45 dark:opacity-30"
-        style={{
-          background: 'radial-gradient(circle, var(--blob-amber) 0%, transparent 70%)',
-        }}
-      />
-      <div
-        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-175 h-175 rounded-full blur-[180px] opacity-30 dark:opacity-20"
-        style={{
-          background: 'radial-gradient(circle, var(--blob-purple) 0%, var(--blob-coral) 50%, transparent 70%)',
-        }}
-      />
+        {/* Inputs — no card, no tooltips, just clean fields */}
+        <div className="mt-12 space-y-8">
+          <div className="space-y-2.5">
+            <label
+              htmlFor="project-name"
+              className="block text-sm font-medium text-foreground"
+            >
+              Project name
+            </label>
+            <Input
+              id="project-name"
+              type="text"
+              value={projectName}
+              onChange={(e) => setProjectName(e.target.value)}
+              placeholder="e.g. Q3 Product Strategy Review"
+              className="h-12 text-base bg-background/40 backdrop-blur-md border-border/60 focus:border-primary/50 focus:ring-primary/20 transition-all"
+              disabled={submitting}
+            />
+          </div>
 
-      {/* Main content - centered vertically and horizontally */}
-      <div className="relative z-10 flex flex-col items-center justify-center min-h-screen px-6 py-12">
-        <div className="w-full max-w-2xl space-y-10">
-          {/* Welcome heading */}
-          <h1 className="font-serif text-6xl md:text-7xl lg:text-8xl font-normal text-foreground tracking-tight">
-            Welcome John.
-          </h1>
+          <div className="space-y-2.5">
+            <label
+              htmlFor="description"
+              className="block text-sm font-medium text-foreground"
+            >
+              What's it about?
+            </label>
+            <Textarea
+              id="description"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="A few sentences on the audience, the key points, and the outcome you want…"
+              className="min-h-40 text-base leading-7 bg-background/40 backdrop-blur-md border-border/60 focus:border-primary/50 focus:ring-primary/20 resize-y overflow-auto transition-all"
+              disabled={submitting}
+            />
+          </div>
 
-          {/* Form section */}
-          <div className="space-y-8">
-            {/* Project name input */}
-            <div className="space-y-3">
-              <label
-                htmlFor="project-name"
-                className="flex items-center text-sm font-medium text-muted-foreground uppercase tracking-wider"
-              >
-                <span>
-                What do you want to call your project?
-                </span>
-                <Tooltip>
-                  <TooltipTrigger className="ml-2">
-                    <CircleQuestionMark className="w-3.5 h-3.5" />
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>This name will be used to identify your project only. PPT title will be generated automatically.</p>
-                  </TooltipContent>
-                </Tooltip>
-              </label>
-              <Input
-                id="project-name"
-                type="text"
-                value={projectName}
-                onChange={(e) => setProjectName(e.target.value)}
-                placeholder="Enter your project name"
-                className="h-14 text-lg bg-background/30 backdrop-blur-md border-border/60 focus:border-primary/50 focus:ring-primary/20 transition-all"
-                disabled={submitting}
-              />
-            </div>
-
-            {/* Description textarea */}
-            <div className="space-y-3">
-              <label
-                htmlFor="description"
-                className="flex items-center text-sm font-medium text-muted-foreground uppercase tracking-wider"
-              >
-                <span>
-                What do you wanna build?
-                </span>
-                <Tooltip>
-                  <TooltipTrigger className="ml-2">
-                    <CircleQuestionMark className="w-3.5 h-3.5" />
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Give as much context as possible to help the AI generate a PPT title.<br />You can specify number of slides and key points to include in the PPT.</p>
-                  </TooltipContent>
-                </Tooltip>
-              </label>
-              <Textarea
-                id="description"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Describe your project idea..."
-                className="min-h-50 text-base bg-background/30 backdrop-blur-md border-border/60 focus:border-primary/50 focus:ring-primary/20 resize-y overflow-auto transition-all"
-                disabled={submitting}
-              />
-            </div>
-
-            {/* Start crafting button */}
-            <div className="flex justify-center pt-4">
-              <Button
-                type="submit"
-                size="lg"
-                className="group gap-3 px-8 py-6 text-lg font-medium hover:scale-105 hover:shadow-lg transition-all duration-300 ease-out rounded-xl"
-                disabled={submitting}
-              >
-                {submitting ? (
-                  <>
-                    <Loader2 className="size-5 animate-spin" />
-                    Creating...
-                  </>
-                ) : (
-                  <>
-                    Start crafting
-                    <ArrowRight className="size-5 transition-transform duration-300 group-hover:translate-x-1" />
-                  </>
-                )}
-              </Button>
-            </div>
+          <div className="flex items-center gap-4 pt-2">
+            <Button
+              type="submit"
+              size="lg"
+              className="group gap-2.5 px-6 py-5 text-base font-medium shadow-lg shadow-primary/15 transition-all duration-300 ease-out rounded-xl"
+              disabled={submitting}
+            >
+              {submitting ? (
+                <>
+                  <Loader2 className="size-5 animate-spin" />
+                  Creating…
+                </>
+              ) : (
+                <>
+                  Start crafting
+                  <ArrowRight className="size-5 transition-transform duration-300 group-hover:translate-x-1" />
+                </>
+              )}
+            </Button>
+            <span className="text-sm text-muted-foreground">
+              Your next good draft starts here.
+            </span>
           </div>
         </div>
       </div>

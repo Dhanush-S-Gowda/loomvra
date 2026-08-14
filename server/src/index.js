@@ -1,13 +1,20 @@
 import express from "express";
 import cors from "cors";
+import { createServer } from "http";
 import path from "path";
 import { fileURLToPath } from "url";
 
 import projectRoutes from "./routes/project.routes.js";
 import settingsRoutes from "./routes/settings.routes.js";
 import slidesRoutes from "./routes/slides.routes.js";
+import { attachEditorWebSocket } from "./routes/editor.websocket.js";
 
 import getSupportedModels from "./utils/getSupportedModels.js"
+
+// Keep an export/browser rejection from taking down the long-running worker process.
+process.on("unhandledRejection", (reason) => {
+    console.error("[Server] Unhandled promise rejection:", reason);
+});
 
 // Start background workers
 import "./workers/design.worker.js";
@@ -49,8 +56,10 @@ app.get("/models", async (_req, res) => {
     res.json(models);
 });
 
-// Start server
-app.listen(PORT, () => {
+// Use a shared HTTP server so the editor WebSocket can upgrade connections.
+const server = createServer(app);
+attachEditorWebSocket(server);
+server.listen(PORT, () => {
     console.log(`🚀 Server running on http://localhost:${PORT}`);
 });
 

@@ -8,13 +8,16 @@ import {
   getSlidesByProject,
   getAllProjects,
   checkProjectNameExists,
+  renameProject,
   getSettings,
   transitionStage,
+  updateProgress,
 } from "../storage/db.js";
 import { renderSlide } from "../pipeline/index.js";
 import StorageMng from "../services/StorageMng.js";
 import designQueue from "../queues/design.queue.js";
 import slidesQueue from "../queues/slides.queue.js";
+import { exportPdf, exportPptx } from "../services/exporter.js";
 
 const router = Router();
 
@@ -136,6 +139,22 @@ router.post("/create-project", async (req, res) => {
  }
 });
 
+router.get("/project/:id/export/:format", async (req, res) => {
+  try {
+    const projectId = String(req.params.id).replace(/^proj-/, "");
+    const format = String(req.params.format).toLowerCase();
+    if (!getProject(projectId)) return res.status(404).json({ error: "Project not found" });
+    if (!['pdf', 'pptx'].includes(format)) return res.status(400).json({ error: "format must be pdf or pptx" });
+    const buffer = format === 'pdf' ? await exportPdf(projectId) : await exportPptx(projectId);
+    res.setHeader('Content-Type', format === 'pdf' ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.presentationml.presentation');
+    res.setHeader('Content-Disposition', `attachment; filename="presentation.${format}"`);
+    return res.send(Buffer.from(buffer));
+  } catch (err) {
+    console.error(`[GET /project/:id/export/:format]`, err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 router.get("/project/:id", (req, res) => {
   try {
     const projectId = req.params.id;
@@ -146,21 +165,28 @@ router.get("/project/:id", (req, res) => {
     }
     const designState = project.design_state || "pending";
     const slidesState = project.slides_state || "pending";
+    const projectName = project.name || "Untitled Project";
 
     // Design failed but slides never started.
     if (designState === "failed") {
       return res.json({
         projectId: `proj-${projectId}`,
+        name: projectName,
         state: "design_failed",
         error: project.design_error || project.error,
+        progress: project.progress ?? 0,
+        progressMessage: project.progress_message,
       });
     }
 
     if (designState !== "completed") {
       return res.json({
         projectId: `proj-${projectId}`,
+        name: projectName,
         state: designState === "processing" ? "design_processing" : "design_pending",
-        message: "Design plan is being generated.",
+        message: project.progress_message || "Design plan is being generated.",
+        progress: project.progress ?? 0,
+        progressMessage: project.progress_message,
       });
     }
 
@@ -179,6 +205,7 @@ router.get("/project/:id", (req, res) => {
         projectId: `proj-${projectId}`,
         state: "design",
         ...designPlan,
+        name: projectName,
       });
     }
 
@@ -186,8 +213,11 @@ router.get("/project/:id", (req, res) => {
     if (slidesState === "failed") {
       return res.json({
         projectId: `proj-${projectId}`,
+        name: projectName,
         state: "slides_failed",
         error: project.slides_error || project.error,
+        progress: project.progress ?? 0,
+        progressMessage: project.progress_message,
       });
     }
 
@@ -195,8 +225,11 @@ router.get("/project/:id", (req, res) => {
     if (slidesState !== "completed") {
       return res.json({
         projectId: `proj-${projectId}`,
+        name: projectName,
         state: "slides_processing",
-        message: "Slides are being generated.",
+        message: project.progress_message || "Slides are being generated.",
+        progress: project.progress ?? 0,
+        progressMessage: project.progress_message,
       });
     }
 
@@ -215,6 +248,7 @@ router.get("/project/:id", (req, res) => {
 
     return res.json({
       projectId: `proj-${projectId}`,
+      name: projectName,
       state: "generated",
       slides,
     });
@@ -229,7 +263,7 @@ router.get("/project/:id", (req, res) => {
  * StorageMng. Returns the served URL path (e.g. "/images/...").
  */
 async function saveBase64Image(projectId, dataUrl) {
-  const match = dataUrl.match(/^data:image\/(png|jpeg|jpg);base64,(.+)$/);
+  const match = dataUrl.match(/^data:image\/(png|jpeg|jpg|webp);base64,(.+)$/);
   if (!match) {
     throw new Error("Unsupported image data URL.");
   }
@@ -241,6 +275,33 @@ async function saveBase64Image(projectId, dataUrl) {
   await StorageMng.put(filename, buffer);
   return StorageMng.getUrl(filename);
 }
+
+/**
+ * POST /project/:id/images
+ * Accepts a browser image data URL or an external/Pexels URL. External URLs
+ * intentionally remain unchanged; uploaded bytes are persisted locally.
+ */
+router.post("/project/:id/images", async (req, res) => {
+  try {
+    const projectId = req.params.id;
+    if (!getProject(projectId)) return res.status(404).json({ error: "Project not found" });
+    const { image, url, purpose = "" } = req.body || {};
+    const source = image || url;
+    if (typeof source !== "string" || !source.trim()) {
+      return res.status(400).json({ error: "image or url is required" });
+    }
+    const imageUrl = source.startsWith("data:image/")
+      ? await saveBase64Image(projectId, source)
+      : source.trim();
+    if (!imageUrl.startsWith("http://") && !imageUrl.startsWith("https://")) {
+      return res.status(400).json({ error: "Image must be a supported data URL or an http(s) URL." });
+    }
+    return res.status(201).json({ url: imageUrl, purpose, persisted: source.startsWith("data:image/") });
+  } catch (err) {
+    console.error("[POST /project/:id/images]", err);
+    return res.status(400).json({ error: err.message });
+  }
+});
 
 /**
  * Walk the design plan's slide images and replace any base64 data URL `src`
@@ -265,6 +326,18 @@ async function persistDesignPlanImages(projectId, designPlan) {
   return designPlan;
 }
 
+router.patch("/project/:id/title", (req, res) => {
+  try {
+    const project = getProject(req.params.id);
+    if (!project) return res.status(404).json({ error: "Project not found" });
+    const updated = renameProject(req.params.id, req.body?.name ?? req.body?.title);
+    return res.json({ projectId: `proj-${updated.id}`, name: updated.name });
+  } catch (err) {
+    if (err.code === "PROJECT_NAME_EXISTS") return res.status(409).json({ error: err.message, code: err.code });
+    return res.status(400).json({ error: err.message });
+  }
+});
+
 router.patch("/project/:id", async (req, res) => {
   try {
     const projectId = req.params.id;
@@ -275,6 +348,19 @@ router.patch("/project/:id", async (req, res) => {
     }
 
     const updates = { ...req.body };
+
+    if (updates.name !== undefined) {
+      try {
+        const renamed = renameProject(projectId, updates.name);
+        if (!renamed) return res.status(404).json({ error: "Project not found" });
+        delete updates.name;
+      } catch (err) {
+        if (err.code === "PROJECT_NAME_EXISTS") {
+          return res.status(409).json({ error: err.message, code: err.code });
+        }
+        return res.status(400).json({ error: err.message });
+      }
+    }
 
     // When a design plan is being saved, persist any base64 images and store
     // the plan as JSON in the project row.
@@ -303,6 +389,7 @@ router.patch("/project/:id", async (req, res) => {
 
     return res.json({
       projectId: `proj-${projectId}`,
+      name: updatedProject.name,
       state: "design",
       ...designPlan,
     });
@@ -357,6 +444,7 @@ router.post("/retry-design", async (req, res) => {
     }
 
     const proj = transitionStage(projectId, "design", "processing");
+    updateProgress(projectId, 0, "Preparing design plan");
     if (!proj) {
       return res.status(409).json({
         error: `Cannot retry design in state: ${project.design_state}`,
@@ -467,19 +555,21 @@ router.post("/start-crafting/:id", async (req, res) => {
       return res.status(400).json({ error: errMsg });
     }
 
+    const proj = transitionStage(projectId, "slides", "processing");
+    updateProgress(projectId, 0, "Preparing slide generation");
+    if (!proj) {
+      return res.status(409).json({
+        error: `Cannot start slides in state: ${project.slides_state}`,
+        state: project.slides_state,
+      });
+    }
+
     try {
       await slidesQueue.add(`generate-slides-${projectId}`, {
         projectId: Number(projectId),
         designPlan: designPlan,
         model: model,
       });
-      const proj = transitionStage(projectId, "slides", "processing");
-      if (!proj) {
-        return res.status(409).json({
-          error: `Cannot start slides in state: ${project.slides_state}`,
-          state: project.slides_state,
-        });
-      }
     } catch (err) {
       transitionStage(projectId, "slides", "failed", err.message);
 
@@ -541,16 +631,15 @@ router.post("/retry-slides/:id", async (req, res) => {
   if (!designPlan) {
     return res.status(422).json({ error: "Design plan is invalid." });
   }
+  const proj = transitionStage(id, "slides", "processing");
+  updateProgress(id, 0, "Preparing slide generation");
+  if (!proj) return res.status(500).json({ error: "Failed to retry slides." });
   try {
     await slidesQueue.add(`generate-slides-${id}`, {
       projectId: Number(id),
       designPlan: designPlan,
       model: model,
     });
-    const proj = transitionStage(id, "slides", "processing");
-    if (!proj) {
-      return res.status(500).json({ error: "Failed to retry slides." });
-    }
   } catch (err) {
     transitionStage(id, "slides", "failed", err.message);
     console.error("[POST /retry-slides/:id]", err);

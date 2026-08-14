@@ -28,7 +28,7 @@ const SLIDES_PHRASES = [
 
 /* ─── Processing animation component ─── */
 
-function ProcessingAnimation({ phrases, icon: Icon, title, subtitle }) {
+function ProcessingAnimation({ phrases, icon: Icon, title, subtitle, progress = 0, progressMessage }) {
   const [phraseIndex, setPhraseIndex] = useState(0);
 
   useEffect(() => {
@@ -47,7 +47,13 @@ function ProcessingAnimation({ phrases, icon: Icon, title, subtitle }) {
         </div>
       </div>
       <h2 className="text-2xl font-semibold tracking-tight mb-2">{title}</h2>
-      <p className="text-muted-foreground mb-8">{subtitle}</p>
+      <p className="text-muted-foreground mb-3">{progressMessage || subtitle}</p>
+      <div className="w-full max-w-md mb-6">
+        <div className="h-2 rounded-full bg-muted overflow-hidden">
+          <div className="h-full bg-primary transition-all duration-500" style={{ width: `${progress}%` }} />
+        </div>
+        <div className="mt-2 text-right text-xs text-muted-foreground">{progress}%</div>
+      </div>
 
       <div className="max-w-md w-full space-y-3">
         {phrases.map((phrase, idx) => (
@@ -207,6 +213,8 @@ function Project() {
         icon={Palette}
         title="Designing your presentation"
         subtitle="Our AI is crafting a custom design plan for your project"
+        progress={data.progress}
+        progressMessage={data.progressMessage}
       />
     );
   }
@@ -246,6 +254,8 @@ function Project() {
         icon={Layers}
         title="Crafting your slides"
         subtitle="Generating beautiful, content-rich slides from your design plan"
+        progress={data.progress}
+        progressMessage={data.progressMessage}
       />
     );
   }

@@ -1,6 +1,13 @@
 import { useState, useRef, useEffect, useCallback, forwardRef } from 'react';
 import { Button } from '@/components/ui/button';
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { downloadProjectExport } from '@/lib/api';
+import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
@@ -8,6 +15,8 @@ import {
 } from '@/components/ui/tooltip';
 import {
   Presentation,
+  FileText,
+  FileDown,
   ArrowRight,
   Monitor,
   ChevronLeft,
@@ -17,6 +26,7 @@ import {
   Plus,
 } from 'lucide-react';
 import { AIChatPanel } from './AIChatPanel';
+import { toast } from 'sonner';
 
 const SLIDE_WIDTH = 1280;
 const SLIDE_HEIGHT = 720;
@@ -72,23 +82,26 @@ function ScaledSlide({
           : {}),
       }}
     >
-      <iframe
-        ref={iframeRef}
-        title="slide"
-        className={`absolute border-0 ${interactive ? '' : 'pointer-events-none'}`}
-        style={{
-          width: SLIDE_WIDTH,
-          height: SLIDE_HEIGHT,
-          transform:
-            isContain && !isControlled
-              ? `translate(-50%, -50%) scale(${scale})`
-              : `scale(${scale})`,
-          transformOrigin: isContain && !isControlled ? 'center center' : 'top left',
-          left: isContain && !isControlled ? '50%' : '0',
-          top: isContain && !isControlled ? '50%' : '0',
-        }}
-        sandbox="allow-same-origin"
-      />
+      {/* Static frame: border stays crisp at 1px and exactly wraps the scaled slide */}
+      <div className="absolute inset-0 overflow-hidden rounded-[3px] border border-border">
+        <iframe
+          ref={iframeRef}
+          title="slide"
+          className={`absolute ${interactive ? '' : 'pointer-events-none'}`}
+          style={{
+            width: SLIDE_WIDTH,
+            height: SLIDE_HEIGHT,
+            transform:
+              isContain && !isControlled
+                ? `translate(-50%, -50%) scale(${scale})`
+                : `scale(${scale})`,
+            transformOrigin: isContain && !isControlled ? 'center center' : 'top left',
+            left: isContain && !isControlled ? '50%' : '0',
+            top: isContain && !isControlled ? '50%' : '0',
+          }}
+          sandbox="allow-same-origin"
+        />
+      </div>
     </div>
   );
 }
@@ -300,11 +313,25 @@ function PreviewGenerated({ data }) {
   const [activeIndex, setActiveIndex] = useState(0);
   const [presenting, setPresenting] = useState(false);
   const [zoom, setZoom] = useState(1);
-  const slides = data?.slides || [];
-  const projectTitle = data?.project?.title || data?.projectId || 'Untitled Project';
+  const [editedState, setEditedState] = useState(null);
+  const [exporting, setExporting] = useState(null);
+  const slides = editedState?.source === data ? editedState.slides : data?.slides || [];
+  const projectTitle = data?.name || data?.project?.title || data?.projectId || 'Untitled Project';
   const activeThumbRef = useRef(null);
 
   const activeSlide = slides[activeIndex];
+
+  const handleSlidesUpdated = useCallback((changes) => {
+    if (!changes.length) return;
+    setEditedState((current) => {
+      const next = [...(current?.source === data ? current.slides : data?.slides || [])];
+      for (const change of changes) {
+        const index = next.findIndex((slide) => slide.index === change.slideNumber);
+        if (index >= 0) next[index] = { ...next[index], content: change.content };
+      }
+      return { source: data, slides: next };
+    });
+  }, [data]);
 
   // Keep active thumbnail visible
   useEffect(() => {
@@ -330,10 +357,21 @@ function PreviewGenerated({ data }) {
   const handleZoomIn = () => setZoom((z) => Math.min(z + 0.25, 3));
   const handleZoomOut = () => setZoom((z) => Math.max(z - 0.25, 0.25));
 
+  const handleExport = async (format) => {
+    try {
+      setExporting(format);
+      await downloadProjectExport(data.projectId, format);
+    } catch (error) {
+      toast.error(error.message || 'Export failed');
+    } finally {
+      setExporting(null);
+    }
+  };
+
   return (
     <TooltipProvider delayDuration={200}>
       <div
-        className="grid h-full bg-background grid-rows-[auto_1fr_auto] grid-cols-[1fr_24rem]"
+        className="grid h-full bg-background grid-rows-[auto_1fr_auto] grid-cols-[1fr_auto]"
       >
         {/* Top bar */}
         <div className="col-span-full flex items-center justify-between px-6 py-3 border-b bg-background/95 backdrop-blur">
@@ -351,10 +389,22 @@ function PreviewGenerated({ data }) {
               </TooltipTrigger>
               <TooltipContent>Start presentation</TooltipContent>
             </Tooltip>
-            <Button size="sm">
-              Export
-              <ArrowRight className="w-4 h-4 ml-2" />
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button size="sm" disabled={Boolean(exporting)}>
+                  {exporting ? `Exporting ${exporting.toUpperCase()}…` : 'Export'}
+                  <ArrowRight className="w-4 h-4 ml-2" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuItem onClick={() => handleExport('pdf')}>
+                  <FileText className="mr-2 h-4 w-4" /> Export PDF
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleExport('pptx')}>
+                  <FileDown className="mr-2 h-4 w-4" /> Export PowerPoint
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
 
@@ -367,17 +417,12 @@ function PreviewGenerated({ data }) {
           style={{ background: 'var(--preview-bg)' }}
         />
 
-        {/* AI Chat Panel — right sidebar */}
-        <div className="col-start-2 row-span-2 border-l bg-background overflow-hidden flex flex-col">
+        {/* AI Chat Panel — right sidebar (fixed narrow width, collapses to a slim rail) */}
+        <div className="col-start-2 row-span-2 w-fit overflow-hidden border-l bg-background flex flex-col">
           <AIChatPanel
-            models={[
-              { id: 'gpt-4o', name: 'GPT-4o' },
-              { id: 'gpt-4o-mini', name: 'GPT-4o Mini' },
-              { id: 'claude-3-5-sonnet', name: 'Claude 3.5 Sonnet' },
-              { id: 'claude-3-haiku', name: 'Claude 3 Haiku' },
-              { id: 'gemini-1-5-pro', name: 'Gemini 1.5 Pro' },
-            ]}
+            projectId={data?.projectId}
             slideCount={slides.length}
+            onSlidesUpdated={handleSlidesUpdated}
           />
         </div>
 

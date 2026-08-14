@@ -130,9 +130,11 @@ function normalizeColor(color) {
     return color.replace("#", "");
 }
 
-async function generatePresentation() {
-    const raw = await fs.readFile(SCENE_GRAPH_FILE, "utf8");
-    const scene = JSON.parse(raw);
+export async function generatePresentation(scene, outputFile = null) {
+    if (!scene) {
+        const raw = await fs.readFile(SCENE_GRAPH_FILE, "utf8");
+        scene = JSON.parse(raw);
+    }
 
     const pres = new pptxgen();
     pres.layout = "LAYOUT_WIDE";
@@ -418,7 +420,8 @@ async function generatePresentation() {
                 case "image": {
                     const opts = { ...basePos };
 
-                    opts.path = el.src;
+                    if (el.src?.startsWith("data:")) opts.data = el.src;
+                    else opts.path = el.src;
 
                     // Object-fit sizing
                     if (
@@ -458,8 +461,13 @@ async function generatePresentation() {
         }
     }
 
-    await pres.writeFile({ fileName: OUTPUT_FILE });
-    console.log(`Presentation saved to ${OUTPUT_FILE}`);
+    const fileName = outputFile || `${process.cwd()}/${OUTPUT_FILE}`;
+    const buffer = await pres.write({ outputType: "nodebuffer" });
+    if (outputFile) {
+        await fs.writeFile(outputFile, buffer);
+        return buffer;
+    }
+    await fs.writeFile(fileName, buffer);
+    console.log(`Presentation saved to ${fileName}`);
+    return buffer;
 }
-
-generatePresentation().catch(console.error);

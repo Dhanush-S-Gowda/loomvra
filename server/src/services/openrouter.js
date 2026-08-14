@@ -32,12 +32,13 @@ export async function chatCompletion({
   });
 
   const {
-    stream,
+    stream = true,
     responseFormat,
-    timeoutMs,
+    timeoutMs = Number.parseInt(process.env.OPENROUTER_TIMEOUT_MS || "900000", 10),
     strictHtml,
     temperature,
     reasoning = { effort: "none" },
+    onChunk,
   } = options;
 
   const finalSystemPrompt = strictHtml
@@ -75,12 +76,29 @@ export async function chatCompletion({
       chatRequest,
     },
     {
-      timeoutMs: timeoutMs || 120000,
+      timeoutMs,
       retries: {
         strategy: "none",
       },
     }
   );
 
-  return response;
+  if (!stream) return response;
+
+  // OpenRouter returns an async iterable for streaming responses. Assemble the
+  // same shape as a non-streaming response so callers keep their current JSON
+  // parsing and validation logic.
+  let content = "";
+  for await (const chunk of response) {
+    if (chunk?.error) {
+      throw new Error(chunk.error.message || "OpenRouter streaming error");
+    }
+    const delta = chunk?.choices?.[0]?.delta?.content;
+    if (typeof delta === "string") {
+      content += delta;
+      onChunk?.({ delta, contentLength: content.length });
+    }
+  }
+
+  return { choices: [{ message: { content } }] };
 }

@@ -39,6 +39,18 @@ const StorageMng = {
         return filePath;
     },
 
+    /** Download a remote asset into managed storage and return its safe filename. */
+    async download(url, filename) {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`Asset download failed (${response.status}): ${url}`);
+        const buffer = Buffer.from(await response.arrayBuffer());
+        return this.put(filename, buffer);
+    },
+
+    async read(filename) {
+        return fs.readFile(await this.get(filename));
+    },
+
     /**
      * Get the URL path for an image (to be served via express static).
      * @param {string} filename

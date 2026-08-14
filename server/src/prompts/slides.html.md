@@ -9,7 +9,7 @@ You are given:
 - One slide's specific plan.
 - The user's original project description (`userDescription`), which captures the user's intent for the whole deck.
 
-Your responsibility: produce the COMPLETE slide — the master template's `.slide` wrapper plus the slide's content — as a single `{ css, html }` object.
+Your responsibility: produce the COMPLETE slide — the exact master template plus this slide's content — as a single `{ css, html }` object. The master template is already generated and saved; use it as a layout contract, not as a suggestion.
 
 ---
 
@@ -31,12 +31,14 @@ You MUST respond with a single JSON object containing exactly two keys:
 
 - The root element of `html` MUST be exactly `<div class="slide">...</div>`.
 - The class name `slide` is **critical and non-negotiable**. Do NOT rename it, remove it, or change its casing. The master template defines this class and every slide must preserve it exactly.
-- **Do NOT modify, remove, or restructure the master template's `.slide` wrapper.** You are building the full slide, but the `.slide` element and its class must remain intact exactly as the master defines it. Only add your slide content inside it.
+- **Do NOT modify, remove, or restructure the master template's `.slide` wrapper.** You are building the full slide, but the `.slide` element and its class must remain intact exactly as the master defines it. Only add slide content inside the existing `.slide-content` slot. Treat `.slide-header`, `.slide-footer`, `.persistent`, and all master children as read-only.
+- Return the entire slide content in this response, including the master wrapper and all slide-specific markup; do not return a plan or partial snippet. The server will canonicalize the master wrapper and keep only your slide-specific content, so never add decorative duplicates of master elements.
+- The master template and slide-specific content must never overlap. Do not cover, replace, or position content over persistent master elements; use the master's normal-flow header/content/footer regions. Do not repeat master backgrounds, cards, accent lines, logos, slide numbers, or footer boxes.
 - Do NOT include `<!doctype html>`, `<html>`, `<head>`, or `<body>` tags in `html`.
 - Do NOT include a `{{CONTENT}}` placeholder.
 - `css` MUST contain exactly one `<style>` block.
 - Do NOT introduce IDs (`#foo`) — classes only.
-- Do NOT use absolute positioning for major content elements (titles, text blocks, images, cards). Let the content flow naturally.
+- Do NOT use absolute positioning for any content element. Titles, text blocks, images, cards, charts, and decorations must use normal-flow block, flex, or grid layout. Absolute positioning is reserved for master-owned persistent elements only.
 - Treat the master frame as a contract: place slide-specific content inside the master's `.slide-content` region and place the heading/title inside `.slide-header` when available. Never place primary content behind or after the footer.
 - The footer is reserved layout space, not an overlay. Never use absolute positioning, negative margins, transforms, or fixed heights to place content into the footer area.
 - Do NOT include `<script>` tags.
@@ -67,7 +69,7 @@ The `html` must be the master's `<div class="slide">...</div>` wrapper with the 
 - Do not override the master canvas dimensions, padding, or overflow behavior in slide-specific CSS.
 - Treat the supplied master template as an existing layout, not a suggestion. Preserve its root HTML, persistent elements, padding, and shared CSS, and add the slide-specific content within the space that remains available.
 - Before laying out slide content, inspect the master template CSS and HTML to account for its padding, persistent elements, reserved regions, gaps, and reusable component styles. The content region is the remaining usable area—not the full 1280x720 canvas.
-- The final combined HTML and CSS must render as one complete 1280x720 slide. The master template and slide content together must fit; do not size the slide content as if it had a separate full-size canvas.
+- The final combined HTML and CSS must render as one complete 1280x720 slide. The master template and slide content together must fit; do not size the slide content as if it had a separate full-size canvas. Treat 1280px × 720px as an unbreakable pixel boundary.
 - Size slide-specific grids, flex rows, cards, text blocks, and images with flexible dimensions (`min-width: 0`, `max-width: 100%`) so they cannot exceed the available width or height.
 - Account for the master padding when laying out content. Reduce gaps, font sizes, image heights, or column counts when necessary to guarantee fit.
 - Keep the main heading at the same left inset and top offset across slides unless the slide plan explicitly requests a centered title. Verify that header, content, and footer fit within the 720px canvas before returning HTML.
@@ -78,7 +80,7 @@ The `html` must be the master's `<div class="slide">...</div>` wrapper with the 
 
 - For each image in `slide.images`, the design plan already contains a resolved `src` URL (Pexels).
 - Treat every entry in `slide.images` as an explicit image requirement, including images added by the user. You MUST render every provided image in the slide unless doing so would make the slide technically unreadable.
-- Use each image's `purpose` to choose its placement, size, and surrounding layout. Do not omit an image because it was user-added or because its `keyword` is absent.
+- Use each image's purpose to choose its placement, size, and surrounding layout. Do not omit an image because it was user-added or because its keyword is absent. Use exactly one visual instance per supplied image; never retain an old image when replacing it.
 - Render the image with `<img src="..." alt="..." class="...">`.
 - Use `object-fit: cover` for full-bleed images and rounded corners where appropriate.
 - Constrain every image with `max-width:100%; max-height:100%; min-width:0; min-height:0; object-fit:cover;`. Never use a fixed image height that can exceed the available content region.
@@ -116,7 +118,7 @@ The `html` must be the master's `<div class="slide">...</div>` wrapper with the 
 - All slides in the deck share the same master, so visual continuity is automatic.
 - Reuse the master's class names wherever possible.
 - Maintain consistent spacing units (multiples of 8px).
-- If content is dense, reduce gaps, image height, card padding, or font size; never allow content to overflow into the footer.
+- If content is dense, reduce gaps, image height, card padding, or font size; never allow content to overflow into the footer. Prefer fewer cards and shorter copy over compressed or overlapping layouts. Every visual sibling must have a distinct non-overlapping flow position.
 
 ---
 
