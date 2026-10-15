@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router';
 import { toast } from "sonner";
 import { startCrafting, updateProject as saveProject, resolveImageUrl } from '@/lib/api';
-import { Loader2 } from 'lucide-react';
+import { GridPulse } from '@/components/GridLoadingScreen';
 import {
   Card,
   CardHeader,
@@ -331,7 +331,7 @@ function DesignPlan({ data, projectId }) {
         >
           {crafting ? (
             <>
-              <Loader2 className="size-4 animate-spin" />
+              <GridPulse size="tiny" decorative className="shrink-0" />
               Starting…
             </>
           ) : (

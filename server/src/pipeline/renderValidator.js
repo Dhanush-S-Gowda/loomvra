@@ -19,6 +19,14 @@ export async function assertRenderedSlide(slide, slideNumber) {
     await page.evaluate(() => document.fonts?.ready);
     await page.waitForTimeout(50);
     const result = await page.evaluate(() => {
+      // Functions from the Node context are not available inside Playwright's
+      // browser-context callback. Keep the geometry helper here so validation
+      // reports real layout failures instead of `overlap is not defined`.
+      const overlapArea = (a, b) => {
+        const width = Math.max(0, Math.min(a.right, b.right) - Math.max(a.left, b.left));
+        const height = Math.max(0, Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top));
+        return width * height;
+      };
       const root = document.querySelector(".slide");
       if (!root) return { errors: ["Missing .slide root element."] };
       const rootRect = root.getBoundingClientRect();
@@ -48,7 +56,7 @@ export async function assertRenderedSlide(slide, slideNumber) {
         for (let j = i + 1; j < nodes.length; j += 1) {
           const a = nodes[i]; const b = nodes[j];
           if (a.position === "absolute" || b.position === "absolute") continue;
-          const area = overlap(a.rect, b.rect);
+          const area = overlapArea(a.rect, b.rect);
           const smaller = Math.min(a.rect.width * a.rect.height, b.rect.width * b.rect.height);
           if (area > 4 && area / smaller > 0.15) errors.push(`${a.label} overlaps ${b.label}`);
         }

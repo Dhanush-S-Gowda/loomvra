@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { API_BASE_URL } from '@/lib/api';
+import { API_BASE_URL, undoEdits, redoEdits } from '@/lib/api';
 import {
   ArrowUpIcon,
   BotMessageSquare,
@@ -9,8 +9,14 @@ import {
   RotateCwIcon,
   XIcon,
   ChevronDownIcon,
+  GripVertical,
+  Square,
+  Undo2,
+  Redo2,
+  PanelsTopLeft,
 } from 'lucide-react';
 import ImagePickerDialog from '@/components/ImagePickerDialog';
+import { GridPulse } from '@/components/GridLoadingScreen';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -64,6 +70,12 @@ const INITIAL_MESSAGES = [
 
 function ChatMessage({ message }) {
   const isUser = message.role === 'user';
+  if (message.kind === 'reasoning') {
+    return <MessageScrollerItem><div className="ml-2 border-l-2 border-amber-500/40 pl-3 text-xs italic text-muted-foreground whitespace-pre-wrap">{message.content}</div></MessageScrollerItem>;
+  }
+  if (message.kind === 'tool') {
+    return <MessageScrollerItem><details className="ml-2 rounded-lg border border-dashed bg-muted/30 px-3 py-2 text-xs"><summary className="flex cursor-pointer list-none items-center gap-2 text-muted-foreground"><GridPulse size="tiny" decorative className="shrink-0" />{message.content}</summary><pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap border-t pt-2 font-mono text-[10px] text-foreground/70">{message.details || 'No details returned.'}</pre></details></MessageScrollerItem>;
+  }
   return (
     <MessageScrollerItem scrollAnchor={isUser}>
       <div className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
@@ -99,6 +111,7 @@ export function AIChatPanel({
   projectId,
   slideCount = 0,
   onSlidesUpdated,
+  onCaptureCurrentSlide,
 }) {
   const [messages, setMessages] = useState(INITIAL_MESSAGES);
   const [input, setInput] = useState('');
@@ -107,6 +120,23 @@ export function AIChatPanel({
   const [imagePickerOpen, setImagePickerOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const socketRef = useRef(null);
+  // Undo/redo history: each stack entry is one AI edit batch `changes[]`.
+  const [undoStack, setUndoStack] = useState([]);
+  const [redoStack, setRedoStack] = useState([]);
+  const [isHistoryBusy, setIsHistoryBusy] = useState(false);
+  const [contextUsage, setContextUsage] = useState({ promptTokens: 0, completionTokens: 0, contextLimit: 32768 });
+  const streamMessageRef = useRef(null);
+  const [panelWidth, setPanelWidth] = useState(360);
+  const resizeRef = useRef(null);
+
+  const startResize = useCallback((event) => {
+    event.preventDefault();
+    resizeRef.current = { startX: event.clientX, startWidth: panelWidth };
+    const move = (moveEvent) => setPanelWidth(Math.min(560, Math.max(320, resizeRef.current.startWidth + resizeRef.current.startX - moveEvent.clientX)));
+    const stop = () => { resizeRef.current = null; window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', stop); };
+    window.addEventListener('mousemove', move);
+    window.addEventListener('mouseup', stop);
+  }, [panelWidth]);
 
   useEffect(() => {
     if (!projectId) return undefined;
@@ -116,12 +146,45 @@ export function AIChatPanel({
     socketRef.current = socket;
     socket.onmessage = (event) => {
       const message = JSON.parse(event.data);
-      if (message.type === 'clarification') {
+      if (message.type === 'ready') {
+        setContextUsage(message.context || { promptTokens: 0, completionTokens: 0, contextLimit: 32768 });
+      } else if (message.type === 'reasoning_delta') {
+        setMessages((prev) => {
+          const last = prev[prev.length - 1];
+          if (last?.kind === 'reasoning') return [...prev.slice(0, -1), { ...last, content: last.content + message.delta }];
+          return [...prev, { id: crypto.randomUUID(), kind: 'reasoning', role: 'assistant', content: message.delta }];
+        });
+      } else if (message.type === 'text_delta') {
+        setMessages((prev) => {
+          const last = prev[prev.length - 1];
+          if (last?.kind === 'stream') return [...prev.slice(0, -1), { ...last, content: last.content + message.delta }];
+          return [...prev, { id: crypto.randomUUID(), kind: 'stream', role: 'assistant', content: message.delta }];
+        });
+      } else if (message.type === 'tool_call_start') {
+        setMessages((prev) => [...prev, { id: crypto.randomUUID(), kind: 'tool', role: 'assistant', content: `Using ${message.tool}…`, details: JSON.stringify(message.args || {}, null, 2) }]);
+      } else if (message.type === 'context_usage') {
+        setContextUsage(message);
+      } else if (message.type === 'session_reset') {
+        setContextUsage(message.context || { promptTokens: 0, completionTokens: 0, contextLimit: 32768 });
+      } else if (message.type === 'edit_applied') {
+        onSlidesUpdated?.([message]);
+      } else if (message.type === 'clarification') {
         setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: 'assistant', content: message.question }]);
         setIsBusy(false);
       } else if (message.type === 'complete') {
         setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: 'assistant', content: message.message }]);
         onSlidesUpdated?.(message.changes || []);
+        // Push this edit batch onto the undo history and clear any stale redo
+        // branch, since the document state has advanced forward.
+        if (message.changes?.length) {
+          setUndoStack((prev) => [...prev, message.changes]);
+          setRedoStack([]);
+        }
+        setIsBusy(false);
+        streamMessageRef.current = null;
+      } else if (message.type === 'stopped') {
+        if (message.changes?.length) onSlidesUpdated?.(message.changes);
+        setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: 'assistant', content: message.message || 'Generation stopped.' }]);
         setIsBusy(false);
       } else if (message.type === 'error') {
         setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: 'assistant', content: `Error: ${message.error}` }]);
@@ -169,7 +232,7 @@ export function AIChatPanel({
 
     let image = pendingImage;
     try {
-      if (image?.src?.startsWith('data:image/')) {
+      if (image?.src?.startsWith('data:image/') && !image.keepInline) {
         const response = await fetch(`${API_BASE_URL}/project/${projectId}/images`, {
           method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ image: image.src, purpose: image.purpose }),
         });
@@ -193,9 +256,22 @@ export function AIChatPanel({
   }, [input, pendingImage, isBusy, projectId, selectedSlides]);
 
   const handleReset = useCallback(() => {
+    const socket = socketRef.current;
+    if (!socket || socket.readyState !== WebSocket.OPEN) {
+      setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: 'assistant', content: 'The editor connection is not ready, so the saved chat context could not be cleared. Please try again.' }]);
+      return;
+    }
+    socket.send(JSON.stringify({ type: 'reset' }));
     setMessages(INITIAL_MESSAGES);
     setInput('');
     setPendingImage(null);
+    setIsBusy(false);
+    setContextUsage((current) => ({ ...current, promptTokens: 0, completionTokens: 0 }));
+  }, []);
+
+  const handleStop = useCallback(() => {
+    const socket = socketRef.current;
+    if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: 'stop' }));
     setIsBusy(false);
   }, []);
 
@@ -205,8 +281,64 @@ export function AIChatPanel({
     setPendingImage({
       src: imageData.src,
       purpose: imageData.purpose || 'Image',
+      keepInline: Boolean(imageData.keepInline),
     });
   }, []);
+
+  const handleAttachCurrentSlide = useCallback(async () => {
+    if (!onCaptureCurrentSlide || isBusy) return;
+    try {
+      const src = await onCaptureCurrentSlide();
+      setPendingImage({ src, purpose: 'Current slide', keepInline: true });
+    } catch (error) {
+      setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: 'assistant', content: `Error: ${error.message}` }]);
+    }
+  }, [onCaptureCurrentSlide, isBusy]);
+
+  // Shared logic for undo/redo: call the server to reverse/re-apply an edit
+  // batch, refresh the preview, then move the batch between the history stacks.
+  const moveHistory = useCallback(
+    async (direction) => {
+      const source = direction === 'undo' ? undoStack : redoStack;
+      const last = source.length ? source[source.length - 1] : null;
+      if (!last || isHistoryBusy || !projectId) return;
+
+      const payload = last.map(({ slideNumber, target, oldCode, newCode }) => ({
+        slideNumber,
+        target,
+        oldCode,
+        newCode,
+      }));
+
+      setIsHistoryBusy(true);
+      try {
+        const result =
+          direction === 'undo'
+            ? await undoEdits(projectId, payload)
+            : await redoEdits(projectId, payload);
+        onSlidesUpdated?.(result.changes || []);
+
+        if (direction === 'undo') {
+          setUndoStack((prev) => prev.slice(0, -1));
+          setRedoStack((prev) => [...prev, last]);
+        } else {
+          setRedoStack((prev) => prev.slice(0, -1));
+          setUndoStack((prev) => [...prev, last]);
+        }
+      } catch (error) {
+        setMessages((prev) => [
+          ...prev,
+          { id: crypto.randomUUID(), role: 'assistant', content: `Error: ${error.message}` },
+        ]);
+      } finally {
+        setIsHistoryBusy(false);
+      }
+    },
+    [undoStack, redoStack, isHistoryBusy, projectId, onSlidesUpdated]
+  );
+
+  const handleUndo = useCallback(() => moveHistory('undo'), [moveHistory]);
+  const handleRedo = useCallback(() => moveHistory('redo'), [moveHistory]);
 
   const slideLabel =
     selectedSlides.size === 0
@@ -214,6 +346,9 @@ export function AIChatPanel({
       : selectedSlides.size === slideCount
         ? 'All slides'
         : `${selectedSlides.size} slide${selectedSlides.size > 1 ? 's' : ''}`;
+  const contextTokens = contextUsage.promptTokens + contextUsage.completionTokens;
+  const contextLimit = Math.max(1, contextUsage.contextLimit);
+  const contextPercent = Math.min(100, (contextTokens / contextLimit) * 100);
 
   return (
     <MessageScrollerProvider>
@@ -235,7 +370,8 @@ export function AIChatPanel({
           </div>
         </div>
       ) : (
-      <Card className="flex h-full w-72 shrink-0 flex-col gap-0 overflow-hidden rounded-none border shadow-xl">
+      <Card className="relative flex h-full shrink-0 flex-col gap-0 overflow-hidden rounded-none border shadow-xl" style={{ width: panelWidth }}>
+        <button type="button" aria-label="Resize AI Assistant" onMouseDown={startResize} className="absolute inset-y-0 left-0 z-20 flex w-2 cursor-ew-resize items-center justify-center bg-transparent hover:bg-primary/10"><GripVertical className="h-8 w-3 text-muted-foreground/40" /></button>
         {/* Header */}
         <CardHeader className="shrink-0 gap-0 border-b px-4 py-3">
           <div className="flex items-center justify-between">
@@ -249,6 +385,34 @@ export function AIChatPanel({
               </span>
             </div>
             <div className="flex items-center gap-1">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label="Undo last AI edit"
+                    onClick={handleUndo}
+                    disabled={!undoStack.length || isBusy || isHistoryBusy}
+                  >
+                    <Undo2 className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Undo</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label="Redo last undone AI edit"
+                    onClick={handleRedo}
+                    disabled={!redoStack.length || isBusy || isHistoryBusy}
+                  >
+                    <Redo2 className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Redo</TooltipContent>
+              </Tooltip>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
@@ -321,6 +485,15 @@ export function AIChatPanel({
 
         {/* Footer */}
         <CardFooter className="shrink-0 flex-col gap-2 border-t bg-muted/30 p-3">
+          <Tooltip>
+            <TooltipTrigger className="block w-full cursor-help bg-transparent p-0 text-left">
+              <div className="w-full">
+                <div className="mb-1 flex items-center justify-between gap-2 text-[10px] uppercase tracking-wider text-muted-foreground"><span>Context used</span><span className="shrink-0">{Math.round(contextPercent)}% used</span></div>
+                <div className="h-1.5 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-primary transition-all" style={{ width: `${contextPercent}%` }} /></div>
+              </div>
+            </TooltipTrigger>
+            <TooltipContent>{contextTokens.toLocaleString()} tokens used of {contextLimit.toLocaleString()} available</TooltipContent>
+          </Tooltip>
           {pendingImage && (
             <Attachment
               orientation="horizontal"
@@ -424,17 +597,39 @@ export function AIChatPanel({
                     <TooltipContent>Upload or search Pexels</TooltipContent>
                   </Tooltip>
 
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <InputGroupButton
+                        type="button"
+                        size="xs"
+                        variant="ghost"
+                        aria-label="Attach current slide as an image"
+                        onClick={handleAttachCurrentSlide}
+                        disabled={isBusy || !onCaptureCurrentSlide}
+                        className="shrink-0 border border-zinc-500 px-2 text-muted-foreground hover:text-foreground"
+                      >
+                        <PanelsTopLeft className="h-4 w-4" />
+                      </InputGroupButton>
+                    </TooltipTrigger>
+                    <TooltipContent>Send the currently open slide as an image attachment with your prompt.</TooltipContent>
+                  </Tooltip>
+
                   {/* Send button */}
-                  <InputGroupButton
+                  {isBusy ? (
+                    <InputGroupButton type="button" variant="destructive" size="icon-sm" onClick={handleStop} className="ml-auto shrink-0" aria-label="Stop generation">
+                      <Square className="h-3.5 w-3.5 fill-current" />
+                      <span className="sr-only">Stop</span>
+                    </InputGroupButton>
+                  ) : <InputGroupButton
                     type="submit"
                     variant="default"
                     size="icon-sm"
-                    disabled={(!input.trim() && !pendingImage) || isBusy}
+                    disabled={!input.trim() && !pendingImage}
                     className="ml-auto shrink-0"
                   >
                     <ArrowUpIcon className="h-4 w-4" />
                     <span className="sr-only">Send</span>
-                  </InputGroupButton>
+                  </InputGroupButton>}
                 </div>
               </InputGroupAddon>
             </InputGroup>

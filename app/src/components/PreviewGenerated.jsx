@@ -37,9 +37,11 @@ function ScaledSlide({
   interactive = true,
   fit = 'width',
   scale: controlledScale,
+  iframeRef: externalIframeRef,
 }) {
   const wrapperRef = useRef(null);
-  const iframeRef = useRef(null);
+  const localIframeRef = useRef(null);
+  const iframeRef = externalIframeRef || localIframeRef;
   const [autoScale, setAutoScale] = useState(1);
 
   useEffect(() => {
@@ -136,7 +138,7 @@ const SlideThumbnail = forwardRef(function SlideThumbnail(
   );
 });
 
-function SlideViewer({ slide, zoom, onZoomIn, onZoomOut, className, style }) {
+function SlideViewer({ slide, zoom, onZoomIn, onZoomOut, className, style, iframeRef }) {
   const containerRef = useRef(null);
   const [baseScale, setBaseScale] = useState(1);
 
@@ -166,6 +168,7 @@ function SlideViewer({ slide, zoom, onZoomIn, onZoomOut, className, style }) {
             className="shrink-0 m-auto"
             fit="contain"
             scale={finalScale}
+            iframeRef={iframeRef}
           />
         </div>
       </div>
@@ -318,6 +321,35 @@ function PreviewGenerated({ data }) {
   const slides = editedState?.source === data ? editedState.slides : data?.slides || [];
   const projectTitle = data?.name || data?.project?.title || data?.projectId || 'Untitled Project';
   const activeThumbRef = useRef(null);
+  const activeSlideFrameRef = useRef(null);
+
+  const captureCurrentSlide = useCallback(async () => {
+    const doc = activeSlideFrameRef.current?.contentDocument;
+    if (!doc?.documentElement) throw new Error('The current slide is not ready to capture.');
+    const serializer = new XMLSerializer();
+    const styles = [...doc.querySelectorAll('style')]
+      .map((style) => serializer.serializeToString(style))
+      .join('');
+    const body = doc.body ? serializer.serializeToString(doc.body) : '';
+    const markup = `${styles}${body}`;
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${SLIDE_WIDTH}" height="${SLIDE_HEIGHT}"><foreignObject width="100%" height="100%"><div xmlns="http://www.w3.org/1999/xhtml" style="width:${SLIDE_WIDTH}px;height:${SLIDE_HEIGHT}px;overflow:hidden">${markup}</div></foreignObject></svg>`;
+    const svgUrl = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml;charset=utf-8' }));
+    try {
+      const image = new Image();
+      image.src = svgUrl;
+      await new Promise((resolve, reject) => {
+        image.onload = resolve;
+        image.onerror = () => reject(new Error('The current slide could not be rendered as an image.'));
+      });
+      const canvas = document.createElement('canvas');
+      canvas.width = SLIDE_WIDTH;
+      canvas.height = SLIDE_HEIGHT;
+      canvas.getContext('2d').drawImage(image, 0, 0, SLIDE_WIDTH, SLIDE_HEIGHT);
+      return canvas.toDataURL('image/png');
+    } finally {
+      URL.revokeObjectURL(svgUrl);
+    }
+  }, []);
 
   const activeSlide = slides[activeIndex];
 
@@ -414,6 +446,7 @@ function PreviewGenerated({ data }) {
           zoom={zoom}
           onZoomIn={handleZoomIn}
           onZoomOut={handleZoomOut}
+          iframeRef={activeSlideFrameRef}
           style={{ background: 'var(--preview-bg)' }}
         />
 
@@ -423,6 +456,7 @@ function PreviewGenerated({ data }) {
             projectId={data?.projectId}
             slideCount={slides.length}
             onSlidesUpdated={handleSlidesUpdated}
+            onCaptureCurrentSlide={captureCurrentSlide}
           />
         </div>
 

@@ -180,3 +180,57 @@
 .bg-noise {
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
 }
+
+.generated-slide-enter {
+  animation: generated-slide-enter 480ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes generated-slide-enter {
+  from { opacity: 0; filter: blur(12px); transform: scale(0.985); }
+  to { opacity: 1; filter: blur(0); transform: scale(1); }
+}
+
+.grid-loader-cell {
+  transition: background-color 360ms ease, border-color 360ms ease, box-shadow 360ms ease, transform 420ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.grid-loader-cell-current {
+  background-color: color-mix(in srgb, var(--primary) 50%, transparent);
+  border-color: color-mix(in srgb, var(--primary) 80%, transparent);
+  box-shadow: 0 0 28px color-mix(in srgb, var(--primary) 42%, transparent);
+  transform: scale(1.1);
+}
+
+.grid-loader-cell-previous {
+  background-color: color-mix(in srgb, var(--primary) 22%, transparent);
+  border-color: color-mix(in srgb, var(--primary) 48%, transparent);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--primary) 18%, transparent);
+  transform: scale(1.03);
+}
+
+.grid-loader-cell-neighbor {
+  background-color: color-mix(in srgb, var(--primary) 12%, transparent);
+  border-color: color-mix(in srgb, var(--primary) 34%, transparent);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--primary) 10%, transparent);
+}
+
+[data-grid-size="tiny"] .grid-loader-cell-current {
+  box-shadow: 0 0 7px color-mix(in srgb, var(--primary) 42%, transparent);
+}
+
+[data-grid-size="tiny"] .grid-loader-cell-previous {
+  box-shadow: 0 0 4px color-mix(in srgb, var(--primary) 18%, transparent);
+}
+
+[data-grid-size="tiny"] .grid-loader-cell-neighbor {
+  box-shadow: 0 0 3px color-mix(in srgb, var(--primary) 10%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .generated-slide-enter {
+    animation: none;
+  }
+  .grid-loader-cell {
+    transition: none;
+  }
+}

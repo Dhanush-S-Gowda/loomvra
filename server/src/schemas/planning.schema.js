@@ -133,7 +133,8 @@ const PlanningSchema = {
         required: [
           "backgroundType",
           "backgroundDescription",
-          "persistentElements"
+          "persistentElements",
+          "image"
         ],
 
         properties: {
@@ -171,13 +172,18 @@ const PlanningSchema = {
           },
 
           image: {
-            type: "object",
-            additionalProperties: false,
-            required: ["src"],
-            properties: {
-              src: { type: "string" },
-              purpose: { type: "string" }
-            }
+            anyOf: [
+              { type: "null" },
+              {
+                type: "object",
+                additionalProperties: false,
+                required: ["src", "purpose"],
+                properties: {
+                  src: { type: "string" },
+                  purpose: { type: ["string", "null"] }
+                }
+              }
+            ]
           }
         }
       },

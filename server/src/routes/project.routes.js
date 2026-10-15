@@ -12,8 +12,9 @@ import {
   getSettings,
   transitionStage,
   updateProgress,
+  updateSlide,
 } from "../storage/db.js";
-import { renderSlide } from "../pipeline/index.js";
+import { renderSlide, processSlide } from "../pipeline/index.js";
 import StorageMng from "../services/StorageMng.js";
 import designQueue from "../queues/design.queue.js";
 import slidesQueue from "../queues/slides.queue.js";
@@ -223,6 +224,17 @@ router.get("/project/:id", (req, res) => {
 
     // Design done, slides still processing.
     if (slidesState !== "completed") {
+      const slides = getSlidesByProject(projectId)
+        .map((s) => {
+          const stored = parseStoredSlide(s.html_content);
+          if (!stored) return null;
+          return {
+            index: s.seq_num,
+            content: renderSlide(stored, s.seq_num),
+          };
+        })
+        .filter(Boolean);
+
       return res.json({
         projectId: `proj-${projectId}`,
         name: projectName,
@@ -230,6 +242,7 @@ router.get("/project/:id", (req, res) => {
         message: project.progress_message || "Slides are being generated.",
         progress: project.progress ?? 0,
         progressMessage: project.progress_message,
+        slides,
       });
     }
 
@@ -337,6 +350,77 @@ router.patch("/project/:id/title", (req, res) => {
     return res.status(400).json({ error: err.message });
   }
 });
+
+/**
+ * Revert (undo) or re-apply (redo) a batch of AI slide edits directly against
+ * the stored composed slide, then return the re-rendered content for each
+ * touched slide so the frontend can refresh its preview.
+ *
+ * Each `change` entry: `{ slideNumber, target: "css"|"html", oldCode, newCode }`.
+ *  - undo: replace newCode -> oldCode
+ *  - redo: replace oldCode -> newCode
+ *
+ * For a given slide the edits are applied in reverse order on undo (and in
+ * forward order on redo) by re-reading the freshly written row each iteration,
+ * so multiple edits to the same slide/field compose correctly.
+ */
+function applyEditReplacement(projectId, changes, direction) {
+  const ordered = direction === "undo" ? [...changes].reverse() : changes;
+  const rendered = new Map();
+
+  for (const change of ordered) {
+    const number = Number(change.slideNumber);
+    const target = change.target === "css" ? "css" : change.target === "html" ? "html" : null;
+    if (!Number.isInteger(number) || !target) continue;
+
+    // On undo the edit must be reversed; on redo it is re-applied forward.
+    const oldCode = direction === "undo" ? change.newCode : change.oldCode;
+    const newCode = direction === "undo" ? change.oldCode : change.newCode;
+    if (typeof oldCode !== "string" || !oldCode || typeof newCode !== "string") continue;
+
+    const row = getSlidesByProject(projectId).find((r) => r.seq_num === number);
+    const stored = row ? parseStoredSlide(row.html_content) : null;
+    if (!stored) continue;
+
+    // Only perform the exact, single occurrence replacement so we never corrupt
+    // a slide when the code fragment unexpectedly shifted or duplicated.
+    const index = stored[target].indexOf(oldCode);
+    if (index < 0 || stored[target].indexOf(oldCode, index + 1) >= 0) continue;
+
+    stored[target] =
+      stored[target].slice(0, index) + newCode + stored[target].slice(index + oldCode.length);
+    const validated = processSlide(stored);
+    updateSlide(projectId, number, { html_content: JSON.stringify(validated) });
+    rendered.set(number, renderSlide(validated, number));
+  }
+
+  return Array.from(rendered, ([slideNumber, content]) => ({ slideNumber, content }));
+}
+
+function handleEditHistory(req, res, direction) {
+  try {
+    const projectId = String(req.params.id).replace(/^proj-/, "");
+    if (!getProject(projectId)) return res.status(404).json({ error: "Project not found" });
+    const { changes } = req.body || {};
+    if (!Array.isArray(changes) || changes.length === 0) {
+      return res.status(400).json({ error: "changes is required" });
+    }
+    const result = applyEditReplacement(projectId, changes, direction);
+    return res.json({
+      message: direction === "undo" ? "Changes reverted." : "Changes reapplied.",
+      changes: result,
+    });
+  } catch (err) {
+    console.error(`[POST /project/:id/edits/${direction}]`, err);
+    return res.status(500).json({ error: err.message });
+  }
+}
+
+/** POST /project/:id/edits/undo — revert the last AI edit batch. */
+router.post("/project/:id/edits/undo", (req, res) => handleEditHistory(req, res, "undo"));
+
+/** POST /project/:id/edits/redo — re-apply a previously undone AI edit batch. */
+router.post("/project/:id/edits/redo", (req, res) => handleEditHistory(req, res, "redo"));
 
 router.patch("/project/:id", async (req, res) => {
   try {

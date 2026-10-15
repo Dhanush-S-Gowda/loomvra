@@ -45,7 +45,49 @@ db.exec(`
     FOREIGN KEY (project_id) REFERENCES project(id) ON DELETE CASCADE,
     UNIQUE (project_id, seq_num)
   );
+
+  CREATE TABLE IF NOT EXISTS agent_sessions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id INTEGER NOT NULL UNIQUE,
+    context_limit INTEGER NOT NULL DEFAULT 32768,
+    prompt_tokens INTEGER NOT NULL DEFAULT 0,
+    completion_tokens INTEGER NOT NULL DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (project_id) REFERENCES project(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS agent_messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id INTEGER NOT NULL,
+    role TEXT NOT NULL,
+    content TEXT DEFAULT '',
+    tool_name TEXT DEFAULT NULL,
+    tool_call_id TEXT DEFAULT NULL,
+    metadata_json TEXT DEFAULT '{}',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (session_id) REFERENCES agent_sessions(id) ON DELETE CASCADE
+  );
 `);
+
+// Additive migrations for databases created before agent sessions existed.
+// CREATE TABLE IF NOT EXISTS above is safe for new databases; these ALTERs
+// cover installations that already have the tables from an earlier shape.
+for (const statement of [
+  "ALTER TABLE agent_sessions ADD COLUMN context_limit INTEGER NOT NULL DEFAULT 32768",
+  "ALTER TABLE agent_sessions ADD COLUMN prompt_tokens INTEGER NOT NULL DEFAULT 0",
+  "ALTER TABLE agent_sessions ADD COLUMN completion_tokens INTEGER NOT NULL DEFAULT 0",
+  "ALTER TABLE agent_sessions ADD COLUMN updated_at TIMESTAMP DEFAULT NULL",
+  "ALTER TABLE agent_messages ADD COLUMN tool_name TEXT DEFAULT NULL",
+  "ALTER TABLE agent_messages ADD COLUMN tool_call_id TEXT DEFAULT NULL",
+  "ALTER TABLE agent_messages ADD COLUMN metadata_json TEXT DEFAULT '{}'",
+]) {
+  try {
+    db.exec(statement);
+  } catch (err) {
+    if (!String(err.message).includes("duplicate column name")) throw err;
+  }
+}
 
 // Enforce title uniqueness at the database boundary as well as in the route.
 // The normalized expression keeps "Demo" and " demo " from colliding later.
@@ -164,6 +206,43 @@ export function createProject(name, userDesc) {
 
 export function getProject(id) {
   return db.prepare("SELECT * FROM project WHERE id = ?").get(id);
+}
+
+export function getOrCreateAgentSession(projectId, contextLimit = 32768) {
+  db.prepare("INSERT OR IGNORE INTO agent_sessions (project_id, context_limit) VALUES (?, ?)").run(projectId, contextLimit);
+  return db.prepare("SELECT * FROM agent_sessions WHERE project_id = ?").get(projectId);
+}
+
+export function getAgentMessages(projectId) {
+  const session = getOrCreateAgentSession(projectId);
+  return db.prepare("SELECT * FROM agent_messages WHERE session_id = ? ORDER BY id ASC").all(session.id);
+}
+
+export function addAgentMessage(projectId, role, content = "", metadata = {}, toolName = null, toolCallId = null) {
+  const session = getOrCreateAgentSession(projectId);
+  const result = db.prepare(`INSERT INTO agent_messages
+    (session_id, role, content, tool_name, tool_call_id, metadata_json)
+    VALUES (?, ?, ?, ?, ?, ?)`).run(session.id, role, content, toolName, toolCallId, JSON.stringify(metadata));
+  db.prepare("UPDATE agent_sessions SET updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(session.id);
+  return db.prepare("SELECT * FROM agent_messages WHERE id = ?").get(result.lastInsertRowid);
+}
+
+export function updateAgentUsage(projectId, promptTokens = 0, completionTokens = 0) {
+  const session = getOrCreateAgentSession(projectId);
+  db.prepare(`UPDATE agent_sessions SET prompt_tokens = ?,
+    completion_tokens = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
+    .run(Number(promptTokens) || 0, Number(completionTokens) || 0, session.id);
+  return db.prepare("SELECT * FROM agent_sessions WHERE id = ?").get(session.id);
+}
+
+export function resetAgentSession(projectId) {
+  const session = getOrCreateAgentSession(projectId);
+  db.transaction(() => {
+    db.prepare("DELETE FROM agent_messages WHERE session_id = ?").run(session.id);
+    db.prepare(`UPDATE agent_sessions SET prompt_tokens = 0, completion_tokens = 0,
+      updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(session.id);
+  })();
+  return db.prepare("SELECT * FROM agent_sessions WHERE id = ?").get(session.id);
 }
 
 export function getAllProjects(page = 1, pageSize = 10) {

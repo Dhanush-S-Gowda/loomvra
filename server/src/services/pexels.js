@@ -43,3 +43,20 @@ export async function searchImage(apiKey, keyword, orientation) {
 
     return suitablePhoto.src.original;
 }
+
+export async function searchImages(apiKey, keyword, orientation = "landscape", count = 5) {
+    const url = new URL(`${PEXELS_BASE}/search`);
+    url.searchParams.set("query", keyword);
+    url.searchParams.set("orientation", orientation);
+    url.searchParams.set("per_page", String(Math.min(Math.max(Number(count) || 5, 1), 8)));
+    const response = await fetch(url.toString(), { headers: { Authorization: apiKey } });
+    if (!response.ok) throw new Error(`Pexels API error: ${response.status}`);
+    const data = await response.json();
+    return (data.photos || []).map((photo) => ({
+        id: photo.id,
+        url: photo.src?.original,
+        thumbnail: photo.src?.medium,
+        alt: photo.alt || keyword,
+        photographer: photo.photographer,
+    }));
+}

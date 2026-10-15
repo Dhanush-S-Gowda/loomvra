@@ -9,6 +9,15 @@ export default () => {
         return parseFloat(String(value).replace("px", "")) || 0;
     }
 
+    function borderRadii(style) {
+        return {
+            topLeft: px(style.borderTopLeftRadius),
+            topRight: px(style.borderTopRightRadius),
+            bottomRight: px(style.borderBottomRightRadius),
+            bottomLeft: px(style.borderBottomLeftRadius),
+        };
+    }
+
     function rgbaToHex(color) {
         if (!color) {
             return null;
@@ -89,6 +98,36 @@ export default () => {
         );
     }
 
+    function svgDataUrl(svg) {
+        const clone = svg.cloneNode(true);
+        const nodes = [clone, ...clone.querySelectorAll("*")];
+        for (const node of nodes) {
+            const computed = window.getComputedStyle(node);
+            for (const property of ["fill", "stroke", "stroke-width", "stroke-linecap", "stroke-linejoin", "fill-rule", "clip-rule", "opacity", "fill-opacity", "stroke-opacity", "display", "visibility"]) {
+                const value = computed.getPropertyValue(property);
+                if (value && value !== "initial" && value !== "normal") node.style.setProperty(property, value);
+            }
+        }
+        if (!clone.getAttribute("xmlns")) clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+        if (!clone.getAttribute("viewBox")) clone.setAttribute("viewBox", `0 0 ${svg.clientWidth || 24} ${svg.clientHeight || 24}`);
+        const markup = new XMLSerializer().serializeToString(clone);
+        return `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(markup)))}`;
+    }
+
+    function pseudoGlyph(element, pseudo) {
+        const pseudoStyle = window.getComputedStyle(element, pseudo);
+        const value = pseudoStyle.content;
+        if (!value || value === "none" || value === "normal") return null;
+        const quoted = value.length >= 2 && value[0] === value[value.length - 1]
+            ? value.slice(1, -1)
+            : value;
+        const text = quoted
+            .replace(/\\([\da-fA-F]{1,6})\s?/g, (_, hex) => String.fromCodePoint(parseInt(hex, 16)))
+            .replace(/\\(.)/g, "$1");
+        if (!text.trim()) return null;
+        return { text, style: pseudoStyle };
+    }
+
     // =====================================
     // ROOT SLIDE
     // =====================================
@@ -142,6 +181,57 @@ export default () => {
         const y = rect.y - slideRect.y;
 
         // =================================
+        // INLINE SVG ICON / VECTOR IMAGE
+        // =================================
+
+        if (tag === "svg") {
+            scene.slides[0].elements.push({
+                kind: "image",
+                src: svgDataUrl(el),
+                alt: el.getAttribute("aria-label") || el.getAttribute("title") || "",
+                href: el.closest("a")?.href || "",
+                frame: { x, y, width: rect.width, height: rect.height },
+                style: {
+                    objectFit: "contain",
+                    objectPosition: "50% 50%",
+                    opacity: parseFloat(style.opacity),
+                    borderRadius: borderRadii(style),
+                    zIndex: getZIndex(style),
+                },
+            });
+            return;
+        }
+
+        // Icon fonts commonly render their glyph through ::before/::after.
+        if (["i", "span", "div"].includes(tag)) {
+            const glyph = pseudoGlyph(el, "::before") || pseudoGlyph(el, "::after");
+            if (glyph) {
+                scene.slides[0].elements.push({
+                    kind: "text",
+                    text: glyph.text,
+                    frame: { x, y, width: rect.width, height: rect.height },
+                    style: {
+                        fontFamily: glyph.style.fontFamily,
+                        fontSize: px(glyph.style.fontSize),
+                        fontWeight: parseInt(glyph.style.fontWeight) || 400,
+                        fontStyle: glyph.style.fontStyle,
+                        color: rgbaToHex(glyph.style.color),
+                        textAlign: "center",
+                        lineHeight: px(glyph.style.lineHeight),
+                        opacity: parseFloat(glyph.style.opacity),
+                        whiteSpace: "nowrap",
+                        paddingTop: 0,
+                        paddingRight: 0,
+                        paddingBottom: 0,
+                        paddingLeft: 0,
+                        zIndex: getZIndex(style),
+                    },
+                });
+                if (tag === "i") return;
+            }
+        }
+
+        // =================================
         // IMAGE
         // =================================
 
@@ -150,6 +240,8 @@ export default () => {
                 kind: "image",
 
                 src: el.src,
+                alt: el.alt || "",
+                href: el.closest("a")?.href || "",
 
                 frame: {
                     x,
@@ -159,9 +251,10 @@ export default () => {
                 },
 
                 style: {
-                    borderRadius: px(style.borderTopLeftRadius),
+                    borderRadius: borderRadii(style),
                     objectFit: style.objectFit,
                     objectPosition: style.objectPosition,
+                    rotate: 0,
 
                     // Border properties (all sides)
                     borderTopWidth: px(style.borderTopWidth),
@@ -276,6 +369,7 @@ export default () => {
                     letterSpacing: px(style.letterSpacing),
                     textDecoration: style.textDecoration,
                     textTransform: style.textTransform,
+                    verticalAlign: style.verticalAlign,
                     whiteSpace: style.whiteSpace,
                     wordBreak: style.wordBreak,
                     color: rgbaToHex(style.color),
@@ -298,7 +392,7 @@ export default () => {
                     borderBottomStyle: style.borderBottomStyle,
                     borderLeftStyle: style.borderLeftStyle,
                     // Radius and shadow
-                    borderRadius: px(style.borderTopLeftRadius),
+                    borderRadius: borderRadii(style),
                     boxShadow:
                         style.boxShadow && style.boxShadow !== "none"
                             ? style.boxShadow
@@ -371,7 +465,7 @@ export default () => {
                 style: {
                     background: rgbaToHex(style.backgroundColor),
                     backgroundAlpha: rgbaToAlpha(style.backgroundColor),
-                    borderRadius: px(style.borderTopLeftRadius),
+                    borderRadius: borderRadii(style),
                     // Border properties (all sides individually)
                     borderTopWidth: px(style.borderTopWidth),
                     borderRightWidth: px(style.borderRightWidth),

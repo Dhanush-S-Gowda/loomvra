@@ -102,6 +102,22 @@ export function deleteProject(id) {
   return request(`/project/${id}`, { method: "DELETE" });
 }
 
+/** POST /project/:id/edits/undo */
+export function undoEdits(projectId, changes) {
+  return request(`/project/${projectId}/edits/undo`, {
+    method: "POST",
+    body: JSON.stringify({ changes }),
+  });
+}
+
+/** POST /project/:id/edits/redo */
+export function redoEdits(projectId, changes) {
+  return request(`/project/${projectId}/edits/redo`, {
+    method: "POST",
+    body: JSON.stringify({ changes }),
+  });
+}
+
 /** POST /retry-design */
 export function retryDesign(projectId) {
   return request("/retry-design", {

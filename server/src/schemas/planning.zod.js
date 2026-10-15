@@ -38,7 +38,7 @@ export const MasterTemplateSchema = z.object({
   backgroundType: z.string(),
   backgroundDescription: z.string(),
   persistentElements: z.array(PersistentElementSchema),
-  image: z.object({ src: z.string(), purpose: z.string().optional() }).optional(),
+  image: z.object({ src: z.string(), purpose: z.string().nullable() }).nullable(),
 });
 
 export const SlideImageSchema = z.object({

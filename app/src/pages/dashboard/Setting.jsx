@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
-import { Eye, EyeOff, InfoIcon, Loader2 } from "lucide-react";
+import { Eye, EyeOff, InfoIcon } from "lucide-react";
+import GridLoadingScreen, { GridPulse } from "@/components/GridLoadingScreen";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -237,9 +238,12 @@ function Setting() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-full p-10">
-        <Loader2 className="w-6 h-6 animate-spin text-primary" />
-      </div>
+      <GridLoadingScreen
+        eyebrow="Workspace"
+        title="Loading settings"
+        subtitle="Getting your saved preferences ready."
+        showProgress={false}
+      />
     );
   }
 
@@ -296,7 +300,7 @@ function Setting() {
                   disabled={verifying === "openrouter"}
                 >
                   {verifying === "openrouter" ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <GridPulse size="tiny" decorative className="shrink-0" />
                   ) : (
                     "Verify"
                   )}
@@ -340,7 +344,7 @@ function Setting() {
                   disabled={verifying === "pexels"}
                 >
                   {verifying === "pexels" ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <GridPulse size="tiny" decorative className="shrink-0" />
                   ) : (
                     "Verify"
                   )}
@@ -383,7 +387,7 @@ function Setting() {
               className="self-start"
             >
               {saving ? (
-                <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Saving…</>
+                <><GridPulse size="tiny" decorative className="mr-2 shrink-0" />Saving…</>
               ) : (
                 "Save Model Settings"
               )}

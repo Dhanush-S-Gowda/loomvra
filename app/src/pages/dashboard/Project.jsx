@@ -1,78 +1,107 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from "react-router";
 import DesignPlan from '@/components/DesignPlan';
+import GridLoadingScreen, { GridPulse } from '@/components/GridLoadingScreen';
 import PreviewGenerated from '@/components/PreviewGenerated';
 import { fetchProjectAPI } from '@/lib/mockApi';
 import { retryDesign, retrySlides } from '@/lib/api';
-import { TriangleAlert, Loader2, Palette, Layers, RefreshCw } from 'lucide-react';
+import { TriangleAlert, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from "sonner";
 
-/* ─── Processing animation phrases ─── */
-
-const DESIGN_PHRASES = [
-  "Analyzing your project description…",
-  "Brainstorming visual concepts…",
-  "Selecting color palette & typography…",
-  "Crafting slide layouts…",
-  "Polishing the design plan…",
-];
-
-const SLIDES_PHRASES = [
-  "Reading the design plan…",
-  "Generating slide content…",
-  "Applying visual styles…",
-  "Assembling HTML slides…",
-  "Final touches…",
-];
-
-/* ─── Processing animation component ─── */
-
-function ProcessingAnimation({ phrases, icon: Icon, title, subtitle, progress = 0, progressMessage }) {
-  const [phraseIndex, setPhraseIndex] = useState(0);
+function LiveSlidePreview({ slide }) {
+  const previewRef = useRef(null);
+  const [scale, setScale] = useState(0.4);
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setPhraseIndex((i) => (i + 1) % phrases.length);
-    }, 2500);
-    return () => clearInterval(interval);
-  }, [phrases]);
+    const preview = previewRef.current;
+    if (!preview) return undefined;
+    const resize = () => setScale(preview.clientWidth / 1280);
+    resize();
+    const observer = new ResizeObserver(resize);
+    observer.observe(preview);
+    return () => observer.disconnect();
+  }, []);
 
   return (
-    <div className="flex flex-col items-center justify-center h-full p-10">
-      <div className="relative mb-8">
-        <div className="absolute inset-0 rounded-full bg-primary/10 animate-ping" />
-        <div className="relative flex items-center justify-center w-24 h-24 rounded-full bg-primary/5 border-2 border-primary/20">
-          <Icon className="w-10 h-10 text-primary animate-pulse" />
+    <div
+      ref={previewRef}
+      role="img"
+      aria-label={slide ? `Blurred live preview of generated slide ${slide.index}` : "Preview of the first generated slide"}
+      className="generated-slide-enter relative aspect-video w-full max-w-[520px] overflow-hidden rounded-2xl border border-border/70 bg-muted/50 shadow-2xl shadow-primary/10"
+    >
+      {slide?.content ? (
+        <iframe
+          title={`Live preview of generated slide ${slide.index}`}
+          srcDoc={slide.content}
+          sandbox=""
+          tabIndex={-1}
+          className="pointer-events-none absolute left-0 top-0 h-[720px] w-[1280px] origin-top-left blur-[2px] opacity-80"
+          style={{ transform: `scale(${scale})` }}
+        />
+      ) : (
+        <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-primary/15 via-background to-primary/5">
+          <span className="rounded-full border border-border/70 bg-background/70 px-4 py-2 text-sm text-muted-foreground shadow-sm backdrop-blur-sm">
+            Your first slide will appear here
+          </span>
         </div>
-      </div>
-      <h2 className="text-2xl font-semibold tracking-tight mb-2">{title}</h2>
-      <p className="text-muted-foreground mb-3">{progressMessage || subtitle}</p>
-      <div className="w-full max-w-md mb-6">
-        <div className="h-2 rounded-full bg-muted overflow-hidden">
-          <div className="h-full bg-primary transition-all duration-500" style={{ width: `${progress}%` }} />
-        </div>
-        <div className="mt-2 text-right text-xs text-muted-foreground">{progress}%</div>
+      )}
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-gradient-to-br from-background/10 via-transparent to-primary/10" />
+    </div>
+  );
+}
+
+function SlidesProcessingAnimation({ progress = 0, progressMessage, slides = [] }) {
+  const [activeSlideIndex, setActiveSlideIndex] = useState(0);
+  const safeProgress = Math.max(0, Math.min(100, Number(progress) || 0));
+  const slideMatch = progressMessage?.match(/slide\s+(\d+)\s+of\s+(\d+)/i);
+  const currentSlide = slideMatch ? Number(slideMatch[1]) : null;
+  const totalSlides = slideMatch ? Number(slideMatch[2]) : null;
+  const activeSlide = slides[activeSlideIndex] ?? slides[0];
+
+  useEffect(() => {
+    if (!slides.length) {
+      setActiveSlideIndex(0);
+      return undefined;
+    }
+    setActiveSlideIndex((index) => index % slides.length);
+    if (slides.length < 2) return undefined;
+    const interval = setInterval(() => {
+      setActiveSlideIndex((index) => (index + 1) % slides.length);
+    }, 2400);
+    return () => clearInterval(interval);
+  }, [slides.length]);
+
+  return (
+    <div className="relative flex h-full min-h-[440px] flex-col items-center justify-center overflow-hidden px-6 pb-32 pt-12 sm:px-10">
+      <div className="mb-5 text-center">
+        <p className="mb-2 text-xs font-medium uppercase tracking-[0.18em] text-primary/80">Building your presentation</p>
+        <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">Crafting your slides</h2>
+        <p className="mt-2 text-sm text-muted-foreground">New pages join the preview as they are finished.</p>
       </div>
 
-      <div className="max-w-md w-full space-y-3">
-        {phrases.map((phrase, idx) => (
-          <div
-            key={idx}
-            className={`flex items-center gap-3 p-3 rounded-lg transition-all duration-700 ${
-              idx === phraseIndex
-                ? "bg-primary/10 text-foreground font-medium scale-100 opacity-100"
-                : "text-muted-foreground/50 scale-95 opacity-40"
-            }`}
-          >
-            <div
-              className={`w-2 h-2 rounded-full transition-all duration-700 ${
-                idx === phraseIndex ? "bg-primary scale-125" : "bg-muted-foreground/30"
-              }`}
-            />
-            <span className="text-sm">{phrase}</span>
-          </div>
-        ))}
+      <GridPulse size="medium" className="my-5" />
+
+      <div className="relative flex w-full justify-center px-4 py-2">
+        <div aria-hidden="true" className="absolute inset-x-1/4 inset-y-8 rounded-full bg-primary/15 blur-3xl" />
+        <LiveSlidePreview key={activeSlide?.index ?? activeSlideIndex} slide={activeSlide} />
+      </div>
+      <div aria-live="polite" className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
+        {currentSlide && totalSlides
+          ? slides.length
+            ? `Previewing slide ${activeSlide?.index ?? activeSlideIndex + 1} of ${slides.length} ready · crafting slide ${currentSlide} of ${totalSlides}`
+            : `Crafting slide ${currentSlide} of ${totalSlides}`
+          : slides.length ? `Previewing slide ${activeSlide?.index ?? activeSlideIndex + 1} of ${slides.length} · crafting the next one` : "Preparing your first slide"}
+      </div>
+
+      <div className="absolute inset-x-0 bottom-0 border-t border-border/70 bg-background/90 px-6 pb-7 pt-5 backdrop-blur-sm sm:px-10">
+        <div className="mx-auto flex w-full max-w-3xl items-center justify-between gap-4 text-xs text-muted-foreground">
+          <span>{progressMessage || "Preparing your slides"}</span>
+          <span className="tabular-nums">{safeProgress}%</span>
+        </div>
+        <div className="mx-auto mt-2.5 h-1.5 w-full max-w-3xl overflow-hidden rounded-full bg-muted">
+          <div className="h-full rounded-full bg-primary transition-[width] duration-700 ease-out" style={{ width: `${safeProgress}%` }} />
+        </div>
       </div>
     </div>
   );
@@ -174,12 +203,12 @@ function Project() {
 
   if (loading && !data) {
     return (
-      <div className="flex items-center justify-center h-full p-10">
-        <div className="flex flex-col items-center gap-3">
-          <Loader2 className="w-8 h-8 animate-spin text-primary" />
-          <span className="text-muted-foreground animate-pulse">Loading project…</span>
-        </div>
-      </div>
+      <GridLoadingScreen
+        eyebrow="Opening project"
+        title="Loading project"
+        subtitle="Getting your presentation ready."
+        showProgress={false}
+      />
     );
   }
 
@@ -208,13 +237,12 @@ function Project() {
   // ── Design processing ──
   if (data.state === "design_processing" || data.state === "design_pending") {
     return (
-      <ProcessingAnimation
-        phrases={DESIGN_PHRASES}
-        icon={Palette}
+      <GridLoadingScreen
         title="Designing your presentation"
-        subtitle="Our AI is crafting a custom design plan for your project"
+        subtitle="Choosing a visual direction and shaping the slide plan."
         progress={data.progress}
         progressMessage={data.progressMessage}
+        progressLabel="Design plan generation progress"
       />
     );
   }
@@ -249,13 +277,10 @@ function Project() {
   // ── Slides processing ──
   if (data.state === "slides_processing" || data.state === "slides_pending") {
     return (
-      <ProcessingAnimation
-        phrases={SLIDES_PHRASES}
-        icon={Layers}
-        title="Crafting your slides"
-        subtitle="Generating beautiful, content-rich slides from your design plan"
+      <SlidesProcessingAnimation
         progress={data.progress}
         progressMessage={data.progressMessage}
+        slides={data.slides || []}
       />
     );
   }

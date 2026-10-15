@@ -99,7 +99,7 @@ function buildLineProps(style, frame) {
 
     function toLineProp(b) {
         return {
-            width: b.width,
+            width: b.width * 0.75,
             color: b.color.replace("#", ""),
             dashType: dashMap[b.borderStyle] || "solid",
         };
@@ -128,6 +128,17 @@ function buildLineProps(style, frame) {
 function normalizeColor(color) {
     if (!color) return null;
     return color.replace("#", "");
+}
+
+function radiusValue(radius) {
+    if (typeof radius === "number") return radius;
+    if (!radius || typeof radius !== "object") return 0;
+    return Math.max(radius.topLeft || 0, radius.topRight || 0, radius.bottomRight || 0, radius.bottomLeft || 0);
+}
+
+function pptxRadius(radius, frame) {
+    const minDimension = Math.min(frame.width, frame.height);
+    return minDimension ? Math.min((2 * radiusValue(radius)) / minDimension, 1) : 0;
 }
 
 export async function generatePresentation(scene, outputFile = null) {
@@ -192,18 +203,16 @@ export async function generatePresentation(scene, outputFile = null) {
                     }
 
                     // Border radius -> use roundRect shape
-                    const hasRadius = style.borderRadius > 0;
+                    const radius = radiusValue(style.borderRadius);
+                    const hasRadius = radius > 0;
                     if (hasRadius) {
                         const minDim = Math.min(frame.width, frame.height);
                         // Use roundRect for partial rounding, ellipse for full rounding
-                        if (style.borderRadius >= minDim / 2) {
+                        if (radius >= minDim / 2) {
                             opts.shapeType = pres.ShapeType.ellipse;
                         } else {
                             opts.shapeType = pres.ShapeType.roundRect;
-                            opts.rectRadius = Math.min(
-                                style.borderRadius / minDim,
-                                1,
-                            );
+                            opts.rectRadius = pptxRadius(style.borderRadius, frame);
                         }
                     }
 
@@ -244,7 +253,7 @@ export async function generatePresentation(scene, outputFile = null) {
                             borderOpts.fill = { color: b.line.color };
                             borderOpts.line = null;
 
-                            const bw = b.line.width;
+                            const bw = style[`border${b.side}Width`] || 0;
                             const bwInchesX = toInchesX(bw);
                             const bwInchesY = toInchesY(bw);
 
@@ -298,7 +307,7 @@ export async function generatePresentation(scene, outputFile = null) {
 
                     // Font size: convert px to pt (1px = 0.75pt)
                     if (style.fontSize) {
-                        opts.fontSize = Math.round(style.fontSize * 0.75);
+                        opts.fontSize = style.fontSize * 0.75;
                     }
 
                     if (style.fontWeight >= 700) opts.bold = true;
@@ -310,14 +319,14 @@ export async function generatePresentation(scene, outputFile = null) {
                     }
 
                     // Text alignment
-                    if (style.textAlign) {
+                    if (["left", "center", "right", "justify"].includes(style.textAlign)) {
                         opts.align = style.textAlign;
                     }
 
                     // Character spacing (letter-spacing in px -> pt)
                     // PptxGenJS charSpacing only supports positive values 1-256
                     if (style.letterSpacing) {
-                        const cs = Math.round(style.letterSpacing * 0.75);
+                        const cs = style.letterSpacing * 0.75;
                         if (cs >= 1) {
                             opts.charSpacing = cs;
                         }
@@ -349,6 +358,16 @@ export async function generatePresentation(scene, outputFile = null) {
                         };
                     }
 
+                    const textRadius = radiusValue(style.borderRadius);
+                    if (textRadius > 0) {
+                        opts.shape = textRadius >= Math.min(frame.width, frame.height) / 2
+                            ? pres.ShapeType.ellipse
+                            : pres.ShapeType.roundRect;
+                        if (opts.shape === pres.ShapeType.roundRect) {
+                            opts.rectRadius = toInchesX(textRadius);
+                        }
+                    }
+
                     // Border
                     const lineProps = buildLineProps(style);
                     if (lineProps) opts.line = lineProps;
@@ -366,25 +385,18 @@ export async function generatePresentation(scene, outputFile = null) {
                         );
                     }
 
-                    // Padding -> inset (use the largest padding value)
-                    const padding = Math.max(
-                        style.paddingTop || 0,
-                        style.paddingRight || 0,
-                        style.paddingBottom || 0,
-                        style.paddingLeft || 0,
-                    );
-                    if (padding > 0) {
-                        opts.inset = toInchesX(padding);
-                    }
+                    // PptxGenJS text margins use points; convert CSS px to points.
+                    opts.margin = [style.paddingTop || 0, style.paddingRight || 0, style.paddingBottom || 0, style.paddingLeft || 0].map((value) => value * 0.75);
 
                     // Vertical alignment from flex/align-items
                     const alignVal =
                         style.alignItems ||
                         style.containerAlignItems ||
                         "";
-                    if (alignVal === "center" || alignVal === "stretch") {
+                    if (alignVal === "center" || alignVal === "stretch" || style.verticalAlign === "middle") {
                         opts.valign = "middle";
                     } else if (
+                        style.verticalAlign === "bottom" ||
                         alignVal === "flex-end" ||
                         alignVal === "end"
                     ) {
@@ -395,6 +407,7 @@ export async function generatePresentation(scene, outputFile = null) {
 
                     // Text transform
                     let text = cleanText(el.text);
+                    if (style.whiteSpace === "nowrap") opts.wrap = false;
                     if (style.textTransform === "uppercase") {
                         text = text.toUpperCase();
                     } else if (style.textTransform === "lowercase") {
@@ -420,6 +433,10 @@ export async function generatePresentation(scene, outputFile = null) {
                 case "image": {
                     const opts = { ...basePos };
 
+                    if (el.alt) opts.altText = el.alt;
+                    if (el.href) opts.hyperlink = { url: el.href };
+                    if (style.rotate) opts.rotate = style.rotate;
+
                     if (el.src?.startsWith("data:")) opts.data = el.src;
                     else opts.path = el.src;
 
@@ -440,9 +457,10 @@ export async function generatePresentation(scene, outputFile = null) {
                     // Border radius -> PptxGenJS only supports full rounding
                     // (circle). For partial rounding, we skip since there's
                     // no native support for rounded-rectangle images.
-                    if (style.borderRadius > 0) {
+                    const radius = radiusValue(style.borderRadius);
+                    if (radius > 0) {
                         const minDim = Math.min(frame.width, frame.height);
-                        if (style.borderRadius >= minDim / 2) {
+                        if (radius >= minDim / 2) {
                             opts.rounding = true;
                         }
                     }
@@ -454,7 +472,47 @@ export async function generatePresentation(scene, outputFile = null) {
                         );
                     }
 
+                    if (style.boxShadow) {
+                        const shadow = parseBoxShadow(style.boxShadow);
+                        if (shadow) opts.shadow = shadow;
+                    }
+
                     slide.addImage(opts);
+
+                    // PPTX images have no line option, so overlay a vector border.
+                    const imageBorders = buildLineProps(style);
+                    if (imageBorders && !Array.isArray(imageBorders)) {
+                        const radius = radiusValue(style.borderRadius);
+                        const outline = {
+                            ...basePos,
+                            fill: { color: "FFFFFF", transparency: 100 },
+                            line: imageBorders.line,
+                        };
+                        if (radius >= Math.min(frame.width, frame.height) / 2) {
+                            slide.addShape(pres.ShapeType.ellipse, outline);
+                        } else if (radius > 0) {
+                            outline.rectRadius = pptxRadius(style.borderRadius, frame);
+                            slide.addShape(pres.ShapeType.roundRect, outline);
+                        } else {
+                            slide.addShape(pres.ShapeType.rect, outline);
+                        }
+                    } else if (imageBorders) {
+                        for (const border of imageBorders) {
+                            const borderPx = style[`border${border.side}Width`] || 0;
+                            const borderX = toInchesX(borderPx);
+                            const borderY = toInchesY(borderPx);
+                            const borderOpts = {
+                                ...basePos,
+                                fill: { color: border.line.color },
+                                line: null,
+                            };
+                            if (border.side === "Top") borderOpts.h = borderY;
+                            if (border.side === "Bottom") { borderOpts.y += h - borderY; borderOpts.h = borderY; }
+                            if (border.side === "Left") borderOpts.w = borderX;
+                            if (border.side === "Right") { borderOpts.x += w - borderX; borderOpts.w = borderX; }
+                            slide.addShape(pres.ShapeType.rect, borderOpts);
+                        }
+                    }
                     break;
                 }
             }

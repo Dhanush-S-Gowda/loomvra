@@ -141,3 +141,14 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
+
+*.db
+*.db-shm
+*.db-wal
+
+*.jpg
+*.jpeg
+*.png
+*.svg
+*.pdf
+*.pptx

@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
-import { ArrowRight, Loader2 } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
+import { GridPulse } from '@/components/GridLoadingScreen';
 import { toast } from "sonner";
 import { createProject } from '@/lib/api';
 
@@ -89,7 +90,7 @@ function NewProject() {
               id="description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="A few sentences on the audience, the key points, and the outcome you want…"
+              placeholder="Describe the presentation you need: how many slides, the style, who it’s for, what to include, and what to leave out."
               className="min-h-40 text-base leading-7 bg-background/40 backdrop-blur-md border-border/60 focus:border-primary/50 focus:ring-primary/20 resize-y overflow-auto transition-all"
               disabled={submitting}
             />
@@ -104,7 +105,7 @@ function NewProject() {
             >
               {submitting ? (
                 <>
-                  <Loader2 className="size-5 animate-spin" />
+                  <GridPulse size="tiny" decorative className="shrink-0" />
                   Creating…
                 </>
               ) : (

@@ -31,8 +31,8 @@ import {
   Sun,
   Moon,
   Heart,
-  Loader2,
 } from 'lucide-react';
+import { GridPulse } from '@/components/GridLoadingScreen';
 import { useTheme } from '@/components/ThemeProvider';
 import { getAllProjects, deleteProject } from '@/lib/api';
 import { toast } from "sonner";
@@ -102,7 +102,7 @@ function Sidebar() {
           <SidebarGroupContent>
             {loading ? (
               <div className="flex justify-center py-4">
-                <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                <GridPulse size="tiny" decorative className="shrink-0" />
               </div>
             ) : projects.length === 0 ? (
               <p className="text-xs text-muted-foreground px-3 py-2">No projects yet</p>

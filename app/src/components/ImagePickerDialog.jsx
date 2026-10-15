@@ -7,7 +7,8 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Search, Upload, ImageIcon, X, Loader2, ArrowLeft } from 'lucide-react';
+import { Search, Upload, ImageIcon, X, ArrowLeft } from 'lucide-react';
+import { GridPulse } from '@/components/GridLoadingScreen';
 
 const PEXELS_API_KEY = import.meta.env.VITE_PEXELS_API_KEY;
 const PEXELS_API_URL = 'https://api.pexels.com/v1/search';
@@ -384,7 +385,7 @@ export default function ImagePickerDialog({ open, onOpenChange, onSelect }) {
                       className="gap-2"
                     >
                       {isSearching ? (
-                        <Loader2 className="size-4 animate-spin" />
+                        <GridPulse size="tiny" decorative className="shrink-0" />
                       ) : (
                         <Search className="size-4" />
                       )}

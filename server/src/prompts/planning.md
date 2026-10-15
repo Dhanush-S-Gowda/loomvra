@@ -397,6 +397,7 @@ Example output structure (dont stick to the same design):
   "masterTemplate": {
     "backgroundType": "Light gradient with organic pattern",
     "backgroundDescription": "Soft gradient from light cream to very pale green. A faint, repeating leaf or soil pattern overlay in extremely low opacity (around 5%) to add subtle texture without distracting.",
+    "image": null,
     "persistentElements": [
       {
         "type": "Logo",
