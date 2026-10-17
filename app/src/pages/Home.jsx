@@ -1,23 +1,22 @@
 import { ArrowRight, ArrowUpRight, Layers3, WandSparkles } from 'lucide-react';
 import { Link } from 'react-router';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
 
 const steps = [
   {
     number: '01',
-    title: 'Bring the rough idea',
-    copy: 'A sentence, a brief, or a half-formed thought is enough to get moving.',
+    title: 'Start with your brief',
+    copy: 'Name the topic, audience, and what you want them to take away.',
   },
   {
     number: '02',
-    title: 'Shape the narrative',
-    copy: 'NextGen turns your direction into a clear story with a point of view.',
+    title: 'Build the story',
+    copy: 'Turn your direction into a focused narrative, then map it across slides.',
   },
   {
     number: '03',
-    title: 'Make it yours',
-    copy: 'Keep editing the deck until every slide sounds and feels like you.',
+    title: 'Refine the deck',
+    copy: 'Review the draft, adjust the details, and make each slide your own.',
   },
 ];
 
@@ -49,7 +48,7 @@ function Home() {
             Make the idea <span className="text-primary">visible.</span>
           </h1>
           <p className="mt-8 max-w-md text-base leading-7 text-muted-foreground sm:text-lg">
-            Describe what you want to say. We help you find the shape, rhythm, and slides to say it well — then leave you with an editable PPT.
+            Share what you want to say and who needs to hear it. NextGen helps shape the story, build the slides, and create an editable PowerPoint draft.
           </p>
           <div className="mt-9 flex flex-wrap items-center gap-4">
             <Link to="/dashboard">
@@ -85,22 +84,21 @@ function Home() {
       </section>
 
       <section className="border-y border-border/70 bg-card/35">
-        <div className="mx-auto grid max-w-7xl gap-12 px-6 py-20 lg:grid-cols-[0.8fr_1.2fr] lg:px-10 lg:py-28">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-primary">The way in</p>
-            <h2 className="mt-4 max-w-sm font-heading text-5xl leading-none tracking-tight sm:text-6xl">Less time arranging. More time thinking.</h2>
+        <div className="mx-auto grid max-w-7xl gap-10 px-6 py-20 lg:grid-cols-[0.8fr_1.2fr] lg:gap-16 lg:px-10 lg:py-28">
+          <div className="lg:pt-3">
+            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-primary">From brief to deck</p>
+            <h2 className="mt-4 max-w-sm font-heading text-5xl leading-none tracking-tight sm:text-6xl">A clear path from first thought to final slides.</h2>
+            <p className="mt-5 max-w-sm leading-6 text-muted-foreground">Keep the message in focus at every step, from the first prompt to the finished draft.</p>
           </div>
-          <div className="grid gap-0 border-t border-border/70">
+          <div className="overflow-hidden rounded-2xl border border-border/80 bg-card/55 shadow-sm shadow-foreground/5">
             {steps.map((step) => (
-              <Card key={step.number} className="rounded-none border-0 border-b border-border/70 bg-transparent py-6 shadow-none sm:py-7">
-                <CardContent className="grid gap-4 px-0 sm:grid-cols-[4rem_1fr] sm:gap-8">
-                  <span className="font-mono text-xs text-primary">{step.number}</span>
-                  <div>
-                    <h3 className="font-heading text-3xl leading-none">{step.title}</h3>
-                    <p className="mt-3 max-w-md leading-6 text-muted-foreground">{step.copy}</p>
-                  </div>
-                </CardContent>
-              </Card>
+              <article key={step.number} className="grid grid-cols-[4.5rem_minmax(0,1fr)] items-stretch gap-4 border-b border-border/70 px-5 py-6 last:border-b-0 sm:grid-cols-[5rem_minmax(0,1fr)] sm:gap-6 sm:px-8 sm:py-7">
+                <span className="flex h-full items-center justify-center font-mono text-7xl font-bold leading-none tabular-nums text-primary">{step.number}</span>
+                <div className="min-w-0 pt-0.5">
+                  <h3 className="font-heading text-3xl leading-none">{step.title}</h3>
+                  <p className="mt-3 max-w-md leading-5 text-muted-foreground">{step.copy}</p>
+                </div>
+              </article>
             ))}
           </div>
         </div>

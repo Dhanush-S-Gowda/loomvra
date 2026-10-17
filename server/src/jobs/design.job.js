@@ -12,7 +12,7 @@ import PlanningSchema from "../schemas/planning.schema.js";
 import PlanningZodSchema from "../schemas/planning.zod.js";
 
 export async function generateDesignPlan(data) {
-  const { projectId, userInput, model } = data;
+  const { projectId, userInput, model, brand = {} } = data;
 
   console.log(`[DesignJob] Starting for project ${projectId}...`);
   updateProgress(projectId, 5, "Preparing design plan");
@@ -37,7 +37,11 @@ export async function generateDesignPlan(data) {
   const resolvedModel = model || settings?.design_model || "deepseek/deepseek-v4-flash";
 
   const planPath = path.join(import.meta.dirname, "../prompts/planning.md");
-  const systemPrompt = fs.readFileSync(planPath, "utf-8");
+  const baseSystemPrompt = fs.readFileSync(planPath, "utf-8");
+  const customPrompt = settings.design_custom_prompt?.trim();
+  const systemPrompt = customPrompt
+      ? `${baseSystemPrompt}\n\n[ADDITIONAL USER INSTRUCTIONS]\n${customPrompt}`
+      : baseSystemPrompt;
 
   console.log(`[DesignJob] Calling OpenRouter for project ${projectId} with model ${resolvedModel}...`);
   updateProgress(projectId, 15, "Generating design plan with AI");
@@ -47,7 +51,10 @@ export async function generateDesignPlan(data) {
           apiKey,
           model: resolvedModel,
           systemPrompt,
-          userPrompt: userInput,
+          userPrompt: [
+              userInput,
+              Object.keys(brand).length ? `\n\nUser-provided brand requirements (apply only the supplied values; choose no defaults for omitted fields):\n${JSON.stringify(brand, null, 2)}` : "",
+          ].join(""),
           options: {
               responseFormat: {
                   type: "json_schema",
@@ -97,6 +104,16 @@ export async function generateDesignPlan(data) {
       throw new Error(errMsg);
   }
   designPlan = parsed.data;
+
+  // Keep the supplied brand assets explicit and inspectable in the saved plan.
+  if (Object.keys(brand).length) {
+      designPlan.brand = brand;
+      if (brand.palette?.primary) designPlan.globalDesign.primary_color = brand.palette.primary;
+      if (brand.palette?.secondary) designPlan.globalDesign.secondary_color = brand.palette.secondary;
+      if (brand.palette?.tertiary) designPlan.globalDesign.accent_color = brand.palette.tertiary;
+      if (brand.fonts?.heading) designPlan.globalDesign.heading_font = brand.fonts.heading;
+      if (brand.fonts?.body) designPlan.globalDesign.body_font = brand.fonts.body;
+  }
 
   updateProgress(projectId, 65, "Finding images for the design plan");
   if (designPlan.slides && Array.isArray(designPlan.slides)) {

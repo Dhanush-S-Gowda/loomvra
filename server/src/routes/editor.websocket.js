@@ -1,7 +1,7 @@
 import { WebSocketServer, WebSocket } from "ws";
 import { chatCompletion } from "../services/openrouter.js";
 import { searchImages } from "../services/pexels.js";
-import { getProject, getSettings, getSlidesByProject, updateSlide, getOrCreateAgentSession, getAgentMessages, addAgentMessage, updateAgentUsage, resetAgentSession } from "../storage/db.js";
+import { getProject, getSettings, getSlidesByProject, updateSlide, getOrCreateAgentSession, updateAgentSessionContextLimit, getAgentMessages, addAgentMessage, updateAgentUsage, resetAgentSession } from "../storage/db.js";
 import { processSlide, renderSlide, assertRenderedSlide } from "../pipeline/index.js";
 
 const EDITOR_SYSTEM = `You are an agentic presentation editor. Explain your plan briefly, inspect the supplied slides, and use tools for every change. Never return JSON edit plans.
@@ -66,7 +66,11 @@ export function attachEditorWebSocket(server) {
     const projectId = String(socket.projectId).replace(/^proj-/, "");
     const project = getProject(projectId);
     if (!project) { send(socket, "error", { error: "Project not found" }); socket.close(1008); return; }
-    const session = getOrCreateAgentSession(projectId);
+    const configuredContextLimit = Number(getSettings().main_model_context_limit) || 32768;
+    const session = updateAgentSessionContextLimit(
+      projectId,
+      configuredContextLimit,
+    );
     send(socket, "ready", { projectId: Number(projectId), sessionId: session.id, context: { promptTokens: session.prompt_tokens, completionTokens: session.completion_tokens, contextLimit: session.context_limit } });
     socket.on("message", async (raw) => {
       try {
@@ -85,6 +89,16 @@ export function attachEditorWebSocket(server) {
         if (message.type !== "edit" || typeof message.prompt !== "string" || !message.prompt.trim()) { send(socket, "error", { error: "A non-empty prompt is required." }); return; }
         const settings = getSettings();
         if (!settings.openrouter_api || !settings.main_model) { send(socket, "error", { error: "OpenRouter and main_model must be configured in settings." }); return; }
+        const chatInstructionSections = [
+          ["Design planning", settings.design_custom_prompt],
+          ["Slide generation", settings.slides_custom_prompt],
+          ["AI chat edits", settings.chat_custom_prompt],
+        ]
+          .filter(([, instructions]) => instructions?.trim())
+          .map(([label, instructions]) => `### ${label}\n${instructions.trim()}`);
+        const editorSystemPrompt = chatInstructionSections.length
+          ? `${EDITOR_SYSTEM}\n\n[ADDITIONAL USER INSTRUCTIONS]\n${chatInstructionSections.join("\n\n")}`
+          : EDITOR_SYSTEM;
         const images = Array.isArray(message.images) ? message.images : [];
         const userContent = JSON.stringify({
           prompt: message.prompt,
@@ -124,14 +138,14 @@ export function attachEditorWebSocket(server) {
           }
           return { role: item.role, content: item.content, ...(toolCalls.length ? { toolCalls } : {}) };
         });
-        const responseMessages = [{ role: "system", content: `${EDITOR_SYSTEM}\nProject: ${project.name}\nCurrent slides:\n${JSON.stringify(slideContext(projectId))}` }, ...stored];
+        const responseMessages = [{ role: "system", content: `${editorSystemPrompt}\nProject: ${project.name}\nCurrent slides:\n${JSON.stringify(slideContext(projectId))}` }, ...stored];
         const changes = [];
         const run = { cancelled: false };
         socket.activeRun = run;
         for (let turn = 0; turn < 8; turn += 1) {
           if (run.cancelled) break;
           send(socket, "status", { stage: "thinking", message: turn ? "Continuing the edit…" : "Thinking through the request…" });
-          const response = await chatCompletion({ apiKey: settings.openrouter_api, model: settings.main_model, systemPrompt: EDITOR_SYSTEM, userPrompt: "", options: { messages: responseMessages, tools: TOOLS, toolChoice: "auto", reasoning: { effort: "medium" }, timeoutMs: 180000, onChunk: (chunk) => { if (chunk.type === "reasoning") send(socket, "reasoning_delta", { delta: chunk.delta }); else if (chunk.delta) send(socket, "text_delta", { delta: chunk.delta }); else if (chunk.type === "tool_call") send(socket, "tool_call_delta", { toolCall: chunk.toolCall }); } } });
+          const response = await chatCompletion({ apiKey: settings.openrouter_api, model: settings.main_model, systemPrompt: editorSystemPrompt, userPrompt: "", options: { messages: responseMessages, tools: TOOLS, toolChoice: "auto", reasoning: { effort: "medium" }, timeoutMs: 180000, onChunk: (chunk) => { if (chunk.type === "reasoning") send(socket, "reasoning_delta", { delta: chunk.delta }); else if (chunk.delta) send(socket, "text_delta", { delta: chunk.delta }); else if (chunk.type === "tool_call") send(socket, "tool_call_delta", { toolCall: chunk.toolCall }); } } });
           const assistant = response.choices?.[0]?.message || {};
           if (response.usage) {
             const usage = updateAgentUsage(

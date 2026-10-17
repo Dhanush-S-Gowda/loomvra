@@ -18,7 +18,13 @@ db.exec(`
     pexel_api TEXT DEFAULT '',
     design_model TEXT DEFAULT '',
     main_model TEXT DEFAULT '',
-    small_model TEXT DEFAULT ''
+    small_model TEXT DEFAULT '',
+    design_model_context_limit INTEGER NOT NULL DEFAULT 32768,
+    main_model_context_limit INTEGER NOT NULL DEFAULT 32768,
+    small_model_context_limit INTEGER NOT NULL DEFAULT 32768,
+    design_custom_prompt TEXT NOT NULL DEFAULT '',
+    slides_custom_prompt TEXT NOT NULL DEFAULT '',
+    chat_custom_prompt TEXT NOT NULL DEFAULT ''
   );
 
   CREATE TABLE IF NOT EXISTS project (
@@ -74,6 +80,12 @@ db.exec(`
 // CREATE TABLE IF NOT EXISTS above is safe for new databases; these ALTERs
 // cover installations that already have the tables from an earlier shape.
 for (const statement of [
+  "ALTER TABLE settings ADD COLUMN design_model_context_limit INTEGER NOT NULL DEFAULT 32768",
+  "ALTER TABLE settings ADD COLUMN main_model_context_limit INTEGER NOT NULL DEFAULT 32768",
+  "ALTER TABLE settings ADD COLUMN small_model_context_limit INTEGER NOT NULL DEFAULT 32768",
+  "ALTER TABLE settings ADD COLUMN design_custom_prompt TEXT NOT NULL DEFAULT ''",
+  "ALTER TABLE settings ADD COLUMN slides_custom_prompt TEXT NOT NULL DEFAULT ''",
+  "ALTER TABLE settings ADD COLUMN chat_custom_prompt TEXT NOT NULL DEFAULT ''",
   "ALTER TABLE agent_sessions ADD COLUMN context_limit INTEGER NOT NULL DEFAULT 32768",
   "ALTER TABLE agent_sessions ADD COLUMN prompt_tokens INTEGER NOT NULL DEFAULT 0",
   "ALTER TABLE agent_sessions ADD COLUMN completion_tokens INTEGER NOT NULL DEFAULT 0",
@@ -168,13 +180,30 @@ export function getSettings() {
 }
 
 export function updateSettings(data) {
-  const allowed = ["openrouter_api", "pexel_api", "design_model", "main_model", "small_model"];
+  const allowed = ["openrouter_api", "pexel_api", "design_model", "main_model", "small_model", "design_custom_prompt", "slides_custom_prompt", "chat_custom_prompt"];
+  const contextLimits = ["design_model_context_limit", "main_model_context_limit", "small_model_context_limit"];
+  const customPrompts = ["design_custom_prompt", "slides_custom_prompt", "chat_custom_prompt"];
   const sets = [];
   const vals = [];
   for (const key of allowed) {
     if (data[key] !== undefined) {
       sets.push(`${key} = ?`);
       vals.push(data[key]);
+    }
+  }
+  for (const key of contextLimits) {
+    if (data[key] !== undefined) {
+      const value = Number(data[key]);
+      if (!Number.isSafeInteger(value) || value <= 0) {
+        throw new Error(`${key} must be a positive integer`);
+      }
+      sets.push(`${key} = ?`);
+      vals.push(value);
+    }
+  }
+  for (const key of customPrompts) {
+    if (data[key] !== undefined && typeof data[key] !== "string") {
+      throw new Error(`${key} must be a string`);
     }
   }
   if (sets.length === 0) return getSettings();
@@ -211,6 +240,13 @@ export function getProject(id) {
 export function getOrCreateAgentSession(projectId, contextLimit = 32768) {
   db.prepare("INSERT OR IGNORE INTO agent_sessions (project_id, context_limit) VALUES (?, ?)").run(projectId, contextLimit);
   return db.prepare("SELECT * FROM agent_sessions WHERE project_id = ?").get(projectId);
+}
+
+export function updateAgentSessionContextLimit(projectId, contextLimit) {
+  const session = getOrCreateAgentSession(projectId, contextLimit);
+  db.prepare("UPDATE agent_sessions SET context_limit = ? WHERE id = ?")
+    .run(contextLimit, session.id);
+  return db.prepare("SELECT * FROM agent_sessions WHERE id = ?").get(session.id);
 }
 
 export function getAgentMessages(projectId) {

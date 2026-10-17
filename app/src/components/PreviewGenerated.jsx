@@ -322,6 +322,53 @@ function PreviewGenerated({ data }) {
   const projectTitle = data?.name || data?.project?.title || data?.projectId || 'Untitled Project';
   const activeThumbRef = useRef(null);
   const activeSlideFrameRef = useRef(null);
+  const [isSelectingSlideImage, setIsSelectingSlideImage] = useState(false);
+  const [selectedSlideImage, setSelectedSlideImage] = useState(null);
+
+  useEffect(() => {
+    if (!isSelectingSlideImage) return undefined;
+    const doc = activeSlideFrameRef.current?.contentDocument;
+    if (!doc) return undefined;
+
+    const hoverStyle = doc.createElement('style');
+    hoverStyle.textContent = `
+      body { cursor: crosshair !important; }
+      img[data-ai-reference-hover] { outline: 3px solid #6366f1 !important; outline-offset: 2px; cursor: crosshair !important; }
+    `;
+    doc.head.appendChild(hoverStyle);
+    let hoveredImage = null;
+    const clearHighlight = () => {
+      if (hoveredImage) hoveredImage.removeAttribute('data-ai-reference-hover');
+      hoveredImage = null;
+    };
+    const handleMouseOver = (event) => {
+      const image = event.target.closest?.('img');
+      if (image === hoveredImage) return;
+      clearHighlight();
+      hoveredImage = image;
+      hoveredImage?.setAttribute('data-ai-reference-hover', 'true');
+    };
+    const handleClick = (event) => {
+      const image = event.target.closest?.('img');
+      if (!image) return;
+      event.preventDefault();
+      event.stopPropagation();
+      setSelectedSlideImage({
+        src: image.currentSrc || image.src,
+        alt: image.alt || '',
+        slideNumber: activeIndex + 1,
+      });
+      setIsSelectingSlideImage(false);
+    };
+    doc.addEventListener('mouseover', handleMouseOver, true);
+    doc.addEventListener('click', handleClick, true);
+    return () => {
+      doc.removeEventListener('mouseover', handleMouseOver, true);
+      doc.removeEventListener('click', handleClick, true);
+      clearHighlight();
+      hoverStyle.remove();
+    };
+  }, [isSelectingSlideImage, activeIndex, slides[activeIndex]?.content]);
 
   const captureCurrentSlide = useCallback(async () => {
     const doc = activeSlideFrameRef.current?.contentDocument;
@@ -457,6 +504,9 @@ function PreviewGenerated({ data }) {
             slideCount={slides.length}
             onSlidesUpdated={handleSlidesUpdated}
             onCaptureCurrentSlide={captureCurrentSlide}
+            onImageReferenceModeChange={setIsSelectingSlideImage}
+            selectedSlideImage={selectedSlideImage}
+            isSelectingImageReference={isSelectingSlideImage}
           />
         </div>
 

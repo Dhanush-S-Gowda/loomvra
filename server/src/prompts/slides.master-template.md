@@ -45,6 +45,8 @@ Given:
 - The global design tokens (`globalDesign`).
 - The planned master template instructions (`masterTemplate`).
 - If `masterTemplate.image` is present, it contains the single user-selected master image as `{ "src": "...", "purpose": "..." }`. Treat both the URL and purpose as authoritative input: include the image in the shared master markup when it fits the requested design, and use its purpose to determine its visual role. Do not replace it with a different image.
+- If `brand.logoUrl` is present, it is the user's uploaded brand logo. Include it as an `<img>` in the shared master markup using that exact URL, preserve its proportions with `object-fit: contain`, and position it consistently without covering slide content.
+- Apply only values provided in `brand.palette`, `brand.fonts`, and `brand.guidance`. Map palette primary/secondary/tertiary to the corresponding design tokens and heading/body fonts to the matching font tokens. Leave unspecified brand tokens to `globalDesign`; never invent a user-selected brand value.
 - The user's original project description (`userDescription`), which captures the user's intent for the whole deck.
 
 Produce the `{ css, html }` master template described above. Use `userDescription` to keep the template's visual personality and tone aligned with what the user originally asked for.

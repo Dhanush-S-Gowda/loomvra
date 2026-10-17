@@ -66,6 +66,19 @@ export const PlanningZodSchema = z.object({
   project: ProjectSchema,
   globalDesign: GlobalDesignSchema,
   masterTemplate: MasterTemplateSchema,
+  brand: z.object({
+    palette: z.object({
+      primary: z.string().optional(),
+      secondary: z.string().optional(),
+      tertiary: z.string().optional(),
+    }).optional(),
+    fonts: z.object({
+      heading: z.string().optional(),
+      body: z.string().optional(),
+    }).optional(),
+    guidance: z.string().optional(),
+    logoUrl: z.string().optional(),
+  }).optional(),
   slides: z.array(SlidePlanSchema).min(1),
 });
 

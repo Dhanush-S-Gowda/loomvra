@@ -14,6 +14,7 @@ import {
   Undo2,
   Redo2,
   PanelsTopLeft,
+  MousePointer2,
 } from 'lucide-react';
 import ImagePickerDialog from '@/components/ImagePickerDialog';
 import { GridPulse } from '@/components/GridLoadingScreen';
@@ -68,6 +69,12 @@ const INITIAL_MESSAGES = [
   },
 ];
 
+function formatTokenCount(value) {
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(2)}M`;
+  if (value >= 1_000) return `${(value / 1_000).toFixed(2)}K`;
+  return String(value);
+}
+
 function ChatMessage({ message }) {
   const isUser = message.role === 'user';
   if (message.kind === 'reasoning') {
@@ -112,11 +119,19 @@ export function AIChatPanel({
   slideCount = 0,
   onSlidesUpdated,
   onCaptureCurrentSlide,
+  onImageReferenceModeChange,
+  selectedSlideImage,
+  isSelectingImageReference,
 }) {
   const [messages, setMessages] = useState(INITIAL_MESSAGES);
   const [input, setInput] = useState('');
   const [isBusy, setIsBusy] = useState(false);
   const [pendingImage, setPendingImage] = useState(null); // { src, purpose? }
+  const [imageReference, setImageReference] = useState(null);
+
+  useEffect(() => {
+    if (selectedSlideImage) setImageReference(selectedSlideImage);
+  }, [selectedSlideImage]);
   const [imagePickerOpen, setImagePickerOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const socketRef = useRef(null);
@@ -222,7 +237,11 @@ export function AIChatPanel({
   }, [slideCount]);
 
   const handleSend = useCallback(async () => {
-    const text = input.trim();
+    const userText = input.trim();
+    const referenceText = imageReference
+      ? `Selected slide image reference (slide ${imageReference.slideNumber}): ${imageReference.src}`
+      : '';
+    const text = [userText, referenceText].filter(Boolean).join('\n\n');
     if ((!text && !pendingImage) || isBusy) return;
     const socket = socketRef.current;
     if (!socket || socket.readyState !== WebSocket.OPEN) {
@@ -251,9 +270,12 @@ export function AIChatPanel({
     setIsBusy(true);
     socket.send(JSON.stringify({
       type: 'edit', prompt: text || 'Use the attached image in the most appropriate selected slide.',
-      slideNumbers: [...selectedSlides], images: image ? [{ url: image.src, purpose: image.purpose }] : [],
+      slideNumbers: [...selectedSlides], images: [
+        ...(imageReference ? [{ url: imageReference.src, purpose: `Reference image from slide ${imageReference.slideNumber}` }] : []),
+        ...(image ? [{ url: image.src, purpose: image.purpose }] : []),
+      ],
     }));
-  }, [input, pendingImage, isBusy, projectId, selectedSlides]);
+  }, [input, pendingImage, imageReference, isBusy, projectId, selectedSlides]);
 
   const handleReset = useCallback(() => {
     const socket = socketRef.current;
@@ -265,9 +287,11 @@ export function AIChatPanel({
     setMessages(INITIAL_MESSAGES);
     setInput('');
     setPendingImage(null);
+    setImageReference(null);
+    onImageReferenceModeChange?.(false);
     setIsBusy(false);
     setContextUsage((current) => ({ ...current, promptTokens: 0, completionTokens: 0 }));
-  }, []);
+  }, [onImageReferenceModeChange]);
 
   const handleStop = useCallback(() => {
     const socket = socketRef.current;
@@ -294,6 +318,10 @@ export function AIChatPanel({
       setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: 'assistant', content: `Error: ${error.message}` }]);
     }
   }, [onCaptureCurrentSlide, isBusy]);
+
+  const handleToggleImageReferenceMode = useCallback(() => {
+    onImageReferenceModeChange?.(!isSelectingImageReference);
+  }, [onImageReferenceModeChange, isSelectingImageReference]);
 
   // Shared logic for undo/redo: call the server to reverse/re-apply an edit
   // batch, refresh the preview, then move the batch between the history stacks.
@@ -349,6 +377,8 @@ export function AIChatPanel({
   const contextTokens = contextUsage.promptTokens + contextUsage.completionTokens;
   const contextLimit = Math.max(1, contextUsage.contextLimit);
   const contextPercent = Math.min(100, (contextTokens / contextLimit) * 100);
+  const contextRemaining = Math.max(0, contextLimit - contextTokens);
+  const contextRemainingPercent = Math.max(0, 100 - Math.round(contextPercent));
 
   return (
     <MessageScrollerProvider>
@@ -488,11 +518,20 @@ export function AIChatPanel({
           <Tooltip>
             <TooltipTrigger className="block w-full cursor-help bg-transparent p-0 text-left">
               <div className="w-full">
-                <div className="mb-1 flex items-center justify-between gap-2 text-[10px] uppercase tracking-wider text-muted-foreground"><span>Context used</span><span className="shrink-0">{Math.round(contextPercent)}% used</span></div>
-                <div className="h-1.5 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-primary transition-all" style={{ width: `${contextPercent}%` }} /></div>
+                <div className="mb-1 flex items-center justify-between gap-2 text-[10px] uppercase tracking-wider text-muted-foreground"><span>Context remaining</span><span className="shrink-0">{contextRemainingPercent}%</span></div>
+                <div
+                  role="progressbar"
+                  aria-label="Context remaining"
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={contextRemainingPercent}
+                  className="h-2 overflow-hidden rounded-full bg-muted"
+                >
+                  <div className="h-full rounded-full bg-primary transition-all duration-300" style={{ width: `${contextRemainingPercent}%` }} />
+                </div>
               </div>
             </TooltipTrigger>
-            <TooltipContent>{contextTokens.toLocaleString()} tokens used of {contextLimit.toLocaleString()} available</TooltipContent>
+            <TooltipContent>{formatTokenCount(contextRemaining)} tokens remaining of {formatTokenCount(contextLimit)} available ({contextRemainingPercent}% remaining)</TooltipContent>
           </Tooltip>
           {pendingImage && (
             <Attachment
@@ -516,6 +555,14 @@ export function AIChatPanel({
                 </AttachmentAction>
               </AttachmentActions>
             </Attachment>
+          )}
+          {imageReference && (
+            <div className="flex w-full items-start justify-between gap-2 rounded-md border bg-background px-2.5 py-2 text-xs">
+              <span className="min-w-0 break-all text-muted-foreground">Image reference: {imageReference.src}</span>
+              <button type="button" className="shrink-0 text-muted-foreground hover:text-foreground" aria-label="Remove image reference" onClick={() => setImageReference(null)}>
+                <XIcon className="size-3.5" />
+              </button>
+            </div>
           )}
           <form
             onSubmit={(e) => {
@@ -614,6 +661,24 @@ export function AIChatPanel({
                     <TooltipContent>Send the currently open slide as an image attachment with your prompt.</TooltipContent>
                   </Tooltip>
 
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <InputGroupButton
+                        type="button"
+                        size="xs"
+                        variant={isSelectingImageReference ? 'secondary' : 'ghost'}
+                        aria-label={isSelectingImageReference ? 'Cancel image reference selection' : 'Select slide image as reference'}
+                        aria-pressed={isSelectingImageReference}
+                        onClick={handleToggleImageReferenceMode}
+                        disabled={isBusy || !onImageReferenceModeChange}
+                        className={`shrink-0 border border-zinc-500 px-2 ${isSelectingImageReference ? 'text-primary' : 'text-muted-foreground hover:text-foreground'}`}
+                      >
+                        <MousePointer2 className="h-4 w-4" />
+                      </InputGroupButton>
+                    </TooltipTrigger>
+                    <TooltipContent>{isSelectingImageReference ? 'Click an image on the slide, or click again to cancel' : 'Select an image on the slide as a reference'}</TooltipContent>
+                  </Tooltip>
+
                   {/* Send button */}
                   {isBusy ? (
                     <InputGroupButton type="button" variant="destructive" size="icon-sm" onClick={handleStop} className="ml-auto shrink-0" aria-label="Stop generation">
@@ -624,7 +689,7 @@ export function AIChatPanel({
                     type="submit"
                     variant="default"
                     size="icon-sm"
-                    disabled={!input.trim() && !pendingImage}
+                    disabled={!input.trim() && !pendingImage && !imageReference}
                     className="ml-auto shrink-0"
                   >
                     <ArrowUpIcon className="h-4 w-4" />

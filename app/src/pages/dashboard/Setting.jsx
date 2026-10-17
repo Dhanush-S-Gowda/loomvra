@@ -5,6 +5,7 @@ import GridLoadingScreen, { GridPulse } from "@/components/GridLoadingScreen";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Combobox,
   ComboboxCollection,
@@ -119,12 +120,13 @@ function Setting() {
   const [designModel, setDesignModel] = useState(null);
   const [mainModel, setMainModel] = useState(null);
   const [smallModel, setSmallModel] = useState(null);
+  const [designCustomPrompt, setDesignCustomPrompt] = useState("");
+  const [slidesCustomPrompt, setSlidesCustomPrompt] = useState("");
+  const [chatCustomPrompt, setChatCustomPrompt] = useState("");
   const [modelGroups, setModelGroups] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [verifying, setVerifying] = useState(null); // "openrouter" | "pexels" | null
-  const [openRouterVerified, setOpenRouterVerified] = useState(false);
-  const [pexelsVerified, setPexelsVerified] = useState(false);
+  const [savedApiKeys, setSavedApiKeys] = useState({ openrouter: "", pexels: "" });
   const [showApiKey, setShowApiKey] = useState(false);
   const [showPexelApiKey, setShowPexelApiKey] = useState(false);
 
@@ -138,13 +140,17 @@ function Setting() {
         ]);
         setApiKey(settings.openrouter_api || "");
         setPexelApiKey(settings.pexel_api || "");
+        setSavedApiKeys({
+          openrouter: settings.openrouter_api || "",
+          pexels: settings.pexel_api || "",
+        });
         setModelGroups(models);
         setDesignModel(findModel(models, settings.design_model));
         setMainModel(findModel(models, settings.main_model));
         setSmallModel(findModel(models, settings.small_model));
-        // If a key is already stored, consider it verified.
-        setOpenRouterVerified(Boolean(settings.openrouter_api));
-        setPexelsVerified(Boolean(settings.pexel_api));
+        setDesignCustomPrompt(settings.design_custom_prompt || "");
+        setSlidesCustomPrompt(settings.slides_custom_prompt || "");
+        setChatCustomPrompt(settings.chat_custom_prompt || "");
       } catch (err) {
         toast.error("Failed to load settings", {
           description: err.message,
@@ -155,71 +161,38 @@ function Setting() {
     })();
   }, []);
 
-  const handleVerifyApiKey = async () => {
-    if (!apiKey.trim()) {
-      toast.error("API key is required", {
-        description: "Please enter a valid OpenRouter API key.",
-      });
-      return;
-    }
-
-    setVerifying("openrouter");
-    try {
-      await verifyOpenRouterKey(apiKey.trim());
-      setOpenRouterVerified(true);
-      toast.success("OpenRouter API key verified", {
-        description: "Your OpenRouter API key is valid.",
-      });
-    } catch (err) {
-      setOpenRouterVerified(false);
-      toast.error("Verification failed", {
-        description: err.message,
-      });
-    } finally {
-      setVerifying(null);
-    }
-  };
-
-  const handleVerifyPexelApiKey = async () => {
-    if (!pexelApiKey.trim()) {
-      toast.error("API key is required", {
-        description: "Please enter a valid Pexels API key.",
-      });
-      return;
-    }
-
-    setVerifying("pexels");
-    try {
-      await verifyPexelsKey(pexelApiKey.trim());
-      setPexelsVerified(true);
-      toast.success("Pexels API key verified", {
-        description: "Your Pexels API key is valid.",
-      });
-    } catch (err) {
-      setPexelsVerified(false);
-      toast.error("Verification failed", {
-        description: err.message,
-      });
-    } finally {
-      setVerifying(null);
-    }
-  };
-
-  const handleSaveModels = async () => {
+  const handleSaveSettings = async () => {
     setSaving(true);
     try {
+      const nextOpenRouterKey = apiKey.trim();
+      const nextPexelsKey = pexelApiKey.trim();
+
+      if (nextOpenRouterKey !== savedApiKeys.openrouter) {
+        await verifyOpenRouterKey(nextOpenRouterKey);
+      }
+      if (nextPexelsKey !== savedApiKeys.pexels) {
+        await verifyPexelsKey(nextPexelsKey);
+      }
+
       await updateSettings({
-        openrouter_api: apiKey.trim(),
-        pexel_api: pexelApiKey.trim(),
+        openrouter_api: nextOpenRouterKey,
+        pexel_api: nextPexelsKey,
         design_model: designModel?.id ?? "",
         main_model: mainModel?.id ?? "",
         small_model: smallModel?.id ?? "",
+        design_model_context_limit: designModel?.context_length ?? 32768,
+        main_model_context_limit: mainModel?.context_length ?? 32768,
+        small_model_context_limit: smallModel?.context_length ?? 32768,
+        design_custom_prompt: designCustomPrompt,
+        slides_custom_prompt: slidesCustomPrompt,
+        chat_custom_prompt: chatCustomPrompt,
       });
+      setSavedApiKeys({ openrouter: nextOpenRouterKey, pexels: nextPexelsKey });
       toast.success("Settings saved", {
         description: "Your API keys and model preferences have been updated.",
       });
     } catch (err) {
-      toast.error("Failed to save settings", {
+      toast.error("Settings were not saved", {
         description: err.message,
       });
     } finally {
@@ -227,11 +200,10 @@ function Setting() {
     }
   };
 
-  // Save Model Settings is only enabled once both keys are verified and a
-  // model is selected for each of the three model fields.
+  // Credentials and all three model choices are required before saving.
   const canSaveModels =
-    openRouterVerified &&
-    pexelsVerified &&
+    Boolean(apiKey.trim()) &&
+    Boolean(pexelApiKey.trim()) &&
     Boolean(designModel) &&
     Boolean(mainModel) &&
     Boolean(smallModel);
@@ -249,7 +221,7 @@ function Setting() {
 
   return (
     <TooltipProvider>
-      <div className="flex flex-col gap-6 p-6 max-w-2xl">
+      <div className="mx-auto flex h-full min-h-0 w-full max-w-6xl flex-col gap-6 overflow-y-auto overscroll-contain p-6">
         <div>
           <p className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.22em] text-primary">
             <span className="size-2 rounded-full bg-primary" /> Workspace
@@ -262,102 +234,74 @@ function Setting() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-2xl">API Keys</CardTitle>
+            <CardTitle className="text-2xl">AI Configuration</CardTitle>
             <CardDescription>
-              Configure your OpenRouter and Pexels API keys. Verify each key
-              before saving.
+              Configure API keys, models, and reusable AI instructions. Changed
+              keys are verified when you save settings.
             </CardDescription>
           </CardHeader>
-          <CardContent className="flex flex-col gap-6">
-            <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium">OpenRouter API Key</label>
-              <div className="flex gap-2">
-                <div className="relative flex-1">
-                  <Input
-                    type={showApiKey ? "text" : "password"}
-                    placeholder="sk-or-..."
-                    value={apiKey}
-                    onChange={(e) => setApiKey(e.target.value)}
-                    className="pr-10"
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="absolute right-0 top-0 h-full px-3 text-muted-foreground hover:text-foreground"
-                    onClick={() => setShowApiKey((prev) => !prev)}
-                    aria-label={showApiKey ? "Hide OpenRouter API key" : "Show OpenRouter API key"}
-                  >
-                    {showApiKey ? (
-                      <EyeOff className="h-4 w-4" />
-                    ) : (
-                      <Eye className="h-4 w-4" />
-                    )}
-                  </Button>
+          <CardContent className="flex flex-col gap-8">
+            <div className="grid gap-5 md:grid-cols-2">
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-medium">OpenRouter API Key</label>
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <Input
+                      type={showApiKey ? "text" : "password"}
+                      placeholder="sk-or-..."
+                      value={apiKey}
+                      onChange={(e) => setApiKey(e.target.value)}
+                      className="pr-10"
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="absolute right-0 top-0 h-full px-3 text-muted-foreground hover:text-foreground"
+                      onClick={() => setShowApiKey((prev) => !prev)}
+                      aria-label={showApiKey ? "Hide OpenRouter API key" : "Show OpenRouter API key"}
+                    >
+                      {showApiKey ? (
+                        <EyeOff className="h-4 w-4" />
+                      ) : (
+                        <Eye className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </div>
                 </div>
-                <Button
-                  onClick={handleVerifyApiKey}
-                  disabled={verifying === "openrouter"}
-                >
-                  {verifying === "openrouter" ? (
-                    <GridPulse size="tiny" decorative className="shrink-0" />
-                  ) : (
-                    "Verify"
-                  )}
-                </Button>
               </div>
-              {openRouterVerified && (
-                <p className="text-sm text-primary">
-                  ✓ OpenRouter API key verified
-                </p>
-              )}
+
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-medium">Pexels API Key</label>
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <Input
+                      type={showPexelApiKey ? "text" : "password"}
+                      placeholder="Pexels API key"
+                      value={pexelApiKey}
+                      onChange={(e) => setPexelApiKey(e.target.value)}
+                      className="pr-10"
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="absolute right-0 top-0 h-full px-3 text-muted-foreground hover:text-foreground"
+                      onClick={() => setShowPexelApiKey((prev) => !prev)}
+                      aria-label={showPexelApiKey ? "Hide Pexels API key" : "Show Pexels API key"}
+                    >
+                      {showPexelApiKey ? (
+                        <EyeOff className="h-4 w-4" />
+                      ) : (
+                        <Eye className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              </div>
             </div>
 
-            <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium">Pexels API Key</label>
-              <div className="flex gap-2">
-                <div className="relative flex-1">
-                  <Input
-                    type={showPexelApiKey ? "text" : "password"}
-                    placeholder="Pexels API key"
-                    value={pexelApiKey}
-                    onChange={(e) => setPexelApiKey(e.target.value)}
-                    className="pr-10"
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="absolute right-0 top-0 h-full px-3 text-muted-foreground hover:text-foreground"
-                    onClick={() => setShowPexelApiKey((prev) => !prev)}
-                    aria-label={showPexelApiKey ? "Hide Pexels API key" : "Show Pexels API key"}
-                  >
-                    {showPexelApiKey ? (
-                      <EyeOff className="h-4 w-4" />
-                    ) : (
-                      <Eye className="h-4 w-4" />
-                    )}
-                  </Button>
-                </div>
-                <Button
-                  onClick={handleVerifyPexelApiKey}
-                  disabled={verifying === "pexels"}
-                >
-                  {verifying === "pexels" ? (
-                    <GridPulse size="tiny" decorative className="shrink-0" />
-                  ) : (
-                    "Verify"
-                  )}
-                </Button>
-              </div>
-              {pexelsVerified && (
-                <p className="text-sm text-primary">
-                  ✓ Pexels API key verified
-                </p>
-              )}
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-1">
+            <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
               <ModelSelect
                 label="Design model"
                 tooltip="This model is used to create the comprehensive design plan."
@@ -381,20 +325,61 @@ function Setting() {
               />
             </div>
 
+            <div className="flex flex-col gap-5 border-t pt-6">
+              <div className="border-l-2 border-primary pl-3">
+                <h3 className="text-base font-semibold">Custom AI instructions</h3>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  These instructions are added to their matching generation prompt and shared with AI chat.
+                </p>
+              </div>
+              <div className="grid gap-5 lg:grid-cols-3">
+                <div className="flex flex-col gap-2">
+                  <label htmlFor="design-custom-prompt" className="text-sm font-medium">Design planning</label>
+                  <Textarea
+                    id="design-custom-prompt"
+                    value={designCustomPrompt}
+                    onChange={(event) => setDesignCustomPrompt(event.target.value)}
+                    placeholder="Add guidance for the presentation plan, audience, tone, and structure..."
+                    rows={4}
+                  />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <label htmlFor="slides-custom-prompt" className="text-sm font-medium">Slide generation</label>
+                  <Textarea
+                    id="slides-custom-prompt"
+                    value={slidesCustomPrompt}
+                    onChange={(event) => setSlidesCustomPrompt(event.target.value)}
+                    placeholder="Add guidance for slide layout, visual style, typography, and content..."
+                    rows={4}
+                  />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <label htmlFor="chat-custom-prompt" className="text-sm font-medium">AI chat edits</label>
+                  <Textarea
+                    id="chat-custom-prompt"
+                    value={chatCustomPrompt}
+                    onChange={(event) => setChatCustomPrompt(event.target.value)}
+                    placeholder="Add reusable guidance for how the AI should handle chat requests and slide edits..."
+                    rows={4}
+                  />
+                </div>
+              </div>
+            </div>
+
             <Button
-              onClick={handleSaveModels}
+              onClick={handleSaveSettings}
               disabled={!canSaveModels || saving}
               className="self-start"
             >
               {saving ? (
                 <><GridPulse size="tiny" decorative className="mr-2 shrink-0" />Saving…</>
               ) : (
-                "Save Model Settings"
+                "Save Settings"
               )}
             </Button>
             {!canSaveModels && (
               <p className="text-sm text-muted-foreground">
-                Verify both API keys and select all three models to enable
+                Enter both API keys and select all three models to enable
                 saving.
               </p>
             )}

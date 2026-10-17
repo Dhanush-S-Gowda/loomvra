@@ -46,10 +46,10 @@ export function getAllProjects(page = 1, pageSize = 50) {
 }
 
 /** POST /create-project */
-export function createProject(name, userDesc) {
+export function createProject(name, userDesc, brand = {}) {
   return request("/create-project", {
     method: "POST",
-    body: JSON.stringify({ name, userDesc }),
+    body: JSON.stringify({ name, userDesc, ...brand }),
   });
 }
 

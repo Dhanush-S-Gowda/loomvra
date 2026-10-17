@@ -4,9 +4,9 @@ import fs from "fs/promises";
 const SCENE_GRAPH_FILE = "scene_graph.json";
 const OUTPUT_FILE = "presentation.pptx";
 
-// Standard PowerPoint widescreen dimensions in inches (13.333" x 7.5")
-const SLIDE_WIDTH_INCHES = 13.333;
-const SLIDE_HEIGHT_INCHES = 7.5;
+// CSS canvas pixels are defined at 96 dpi. Derive the physical slide size from
+// the extracted canvas so coordinates and edges use the exact same scale.
+const CSS_PIXELS_PER_INCH = 96;
 
 function pxToInches(px, slideDimensionPx, slideDimensionInches) {
     return (px / slideDimensionPx) * slideDimensionInches;
@@ -19,9 +19,49 @@ function pxToInches(px, slideDimensionPx, slideDimensionInches) {
 function cleanText(text) {
     if (!text) return "";
     return text
-        .replace(/\\n/g, " ")
+        .replace(/\\n/g, "\n")
         .replace(/\s+/g, " ")
         .trim();
+}
+
+function textRunOptions(run, style) {
+    const runStyle = run?.style || {};
+    const options = {};
+    const fontFace = (runStyle.fontFamily || style.fontFamily || "")
+        .split(",")[0].replace(/["']/g, "").trim();
+    if (fontFace) options.fontFace = fontFace;
+    const fontSize = runStyle.fontSize || style.fontSize;
+    if (fontSize) options.fontSize = fontSize * 0.75;
+    options.bold = (runStyle.fontWeight ?? style.fontWeight) >= 700;
+    options.italic = (runStyle.fontStyle || style.fontStyle) === "italic";
+    const color = runStyle.color || style.color;
+    if (color) options.color = normalizeColor(color);
+    const alpha = runStyle.colorAlpha ?? style.colorAlpha ?? 1;
+    if (alpha < 1) options.transparency = Math.round((1 - alpha) * 100);
+    const decoration = runStyle.textDecoration || style.textDecoration || "";
+    options.underline = decoration.includes("underline");
+    options.strike = decoration.includes("line-through") ? "sngStrike" : false;
+    const letterSpacing = runStyle.letterSpacing ?? style.letterSpacing;
+    // PptxGenJS documents positive spacing, but its OOXML serializer writes
+    // signed character spacing values. Negative CSS tracking is therefore
+    // preserved in points instead of silently discarded.
+    if (letterSpacing) options.charSpacing = letterSpacing * 0.75;
+    return options;
+}
+
+function mapTextTransform(text, transform) {
+    if (transform === "uppercase") return text.toUpperCase();
+    if (transform === "lowercase") return text.toLowerCase();
+    if (transform === "capitalize") return text.replace(/\b\w/g, (c) => c.toUpperCase());
+    return text;
+}
+
+function normalizeRunWhitespace(text) {
+    return String(text ?? "")
+        .replace(/\r/g, "")
+        .split("\n")
+        .map((line) => line.replace(/[\t ]+/g, " "))
+        .join("\n");
 }
 
 /**
@@ -35,6 +75,7 @@ function parseBoxShadow(boxShadow) {
     );
     if (!parts) return null;
 
+    const offsetX = parseFloat(parts[1]) || 0;
     const offsetY = parseFloat(parts[2]) || 0;
     const blur = parseFloat(parts[3]) || 0;
     const colorStr = (parts[5] || "#000000").trim();
@@ -62,8 +103,9 @@ function parseBoxShadow(boxShadow) {
 
     return {
         type: "outer",
-        blur: blur,
-        offset: Math.abs(offsetY),
+        blur: blur * 0.75,
+        offset: Math.hypot(offsetX, offsetY) * 0.75,
+        angle: (Math.round((Math.atan2(offsetX, -offsetY) * 180) / Math.PI) + 360) % 360,
         color: color,
         opacity: opacity,
     };
@@ -81,6 +123,7 @@ function buildLineProps(style, frame) {
         side,
         width: style[`border${side}Width`] || 0,
         color: style[`border${side}Color`],
+        alpha: style[`border${side}Alpha`],
         borderStyle: style[`border${side}Style`],
     }));
 
@@ -102,6 +145,7 @@ function buildLineProps(style, frame) {
             width: b.width * 0.75,
             color: b.color.replace("#", ""),
             dashType: dashMap[b.borderStyle] || "solid",
+            transparency: Math.round((1 - (b.alpha ?? 1)) * 100),
         };
     }
 
@@ -109,7 +153,7 @@ function buildLineProps(style, frame) {
     if (activeBorders.length === 4) {
         const first = activeBorders[0];
         const allSame = activeBorders.every(
-            (b) => b.width === first.width && b.color === first.color && b.borderStyle === first.borderStyle
+            (b) => b.width === first.width && b.color === first.color && b.alpha === first.alpha && b.borderStyle === first.borderStyle
         );
         if (allSame) return { line: toLineProp(first) };
     }
@@ -118,7 +162,20 @@ function buildLineProps(style, frame) {
     return activeBorders.map((b) => ({
         side: b.side,
         line: toLineProp(b),
+        widthPx: b.width,
     }));
+}
+
+/** Draw individual CSS border sides as native PowerPoint lines. */
+function drawPerSideBorders(slide, borders, frame) {
+    if (!Array.isArray(borders)) return;
+    for (const border of borders) {
+        const line = { ...border.line, width: Math.max(0.1, border.widthPx * 0.75) };
+        if (border.side === "Top") slide.addShape("line", { x: frame.x, y: frame.y, w: frame.w, h: 0, line });
+        if (border.side === "Bottom") slide.addShape("line", { x: frame.x, y: frame.y + frame.h, w: frame.w, h: 0, line });
+        if (border.side === "Left") slide.addShape("line", { x: frame.x, y: frame.y, w: 0, h: frame.h, line });
+        if (border.side === "Right") slide.addShape("line", { x: frame.x + frame.w, y: frame.y, w: 0, h: frame.h, line });
+    }
 }
 
 /**
@@ -141,6 +198,25 @@ function pptxRadius(radius, frame) {
     return minDimension ? Math.min((2 * radiusValue(radius)) / minDimension, 1) : 0;
 }
 
+function roundedImageSvg(dataUrl, frame, radius, objectFit) {
+    if (!dataUrl?.startsWith("data:")) return null;
+    const width = Math.max(1, frame.width);
+    const height = Math.max(1, frame.height);
+    const radii = typeof radius === "number"
+        ? [radius, radius, radius, radius]
+        : [radius?.topLeft || 0, radius?.topRight || 0, radius?.bottomRight || 0, radius?.bottomLeft || 0];
+    const [topLeft, topRight, bottomRight, bottomLeft] = radii.map((value) => Math.max(0, Math.min(value, width / 2, height / 2)));
+    const path = [
+        `M ${topLeft} 0`, `H ${width - topRight}`, `Q ${width} 0 ${width} ${topRight}`,
+        `V ${height - bottomRight}`, `Q ${width} ${height} ${width - bottomRight} ${height}`,
+        `H ${bottomLeft}`, `Q 0 ${height} 0 ${height - bottomLeft}`, `V ${topLeft}`,
+        `Q 0 0 ${topLeft} 0`, "Z",
+    ].join(" ");
+    const aspect = objectFit === "contain" ? "xMidYMid meet" : objectFit === "fill" ? "none" : "xMidYMid slice";
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><defs><clipPath id="clip"><path d="${path}"/></clipPath></defs><image href="${dataUrl}" width="${width}" height="${height}" preserveAspectRatio="${aspect}" clip-path="url(#clip)"/></svg>`;
+    return `image/svg+xml;base64,${Buffer.from(svg).toString("base64")}`;
+}
+
 export async function generatePresentation(scene, outputFile = null) {
     if (!scene) {
         const raw = await fs.readFile(SCENE_GRAPH_FILE, "utf8");
@@ -148,18 +224,33 @@ export async function generatePresentation(scene, outputFile = null) {
     }
 
     const pres = new pptxgen();
-    pres.layout = "LAYOUT_WIDE";
+    const firstSlide = scene.slides[0];
+    if (!firstSlide?.width || !firstSlide?.height) {
+        throw new Error("Scene graph is missing valid slide dimensions.");
+    }
+    pres.defineLayout({
+        name: "HTML_CANVAS",
+        width: firstSlide.width / CSS_PIXELS_PER_INCH,
+        height: firstSlide.height / CSS_PIXELS_PER_INCH,
+    });
+    pres.layout = "HTML_CANVAS";
     pres.author = "PPT Maker";
     pres.title = "Generated Presentation";
 
     for (const slideData of scene.slides) {
         const slideWidthPx = slideData.width;
         const slideHeightPx = slideData.height;
+        if (slideWidthPx !== firstSlide.width || slideHeightPx !== firstSlide.height) {
+            throw new Error("All scene graph slides must use the same canvas dimensions.");
+        }
+
+        const slideWidthInches = slideWidthPx / CSS_PIXELS_PER_INCH;
+        const slideHeightInches = slideHeightPx / CSS_PIXELS_PER_INCH;
 
         const toInchesX = (px) =>
-            pxToInches(px, slideWidthPx, SLIDE_WIDTH_INCHES);
+            pxToInches(px, slideWidthPx, slideWidthInches);
         const toInchesY = (px) =>
-            pxToInches(px, slideHeightPx, SLIDE_HEIGHT_INCHES);
+            pxToInches(px, slideHeightPx, slideHeightInches);
 
         const slide = pres.addSlide();
 
@@ -190,7 +281,7 @@ export async function generatePresentation(scene, outputFile = null) {
                     const opts = { ...basePos };
 
                     // Fill
-                    if (style.background) {
+                    if (style.background && !style.backgroundImage) {
                         opts.fill = {
                             color: normalizeColor(style.background),
                             transparency:
@@ -220,9 +311,6 @@ export async function generatePresentation(scene, outputFile = null) {
                     const lineResult = buildLineProps(style, frame);
                     if (lineResult) {
                         if (Array.isArray(lineResult)) {
-                            // Per-side borders: draw the main shape first without border,
-                            // then draw thin rectangles for each side
-                            // (main shape drawn below, border shapes added after)
                             opts.line = null;
                         } else {
                             opts.line = lineResult.line;
@@ -246,47 +334,7 @@ export async function generatePresentation(scene, outputFile = null) {
                     delete opts.shapeType;
                     slide.addShape(shapeType, opts);
 
-                    // Draw per-side borders as thin rectangles
-                    if (lineResult && Array.isArray(lineResult)) {
-                        for (const b of lineResult) {
-                            const borderOpts = { ...basePos };
-                            borderOpts.fill = { color: b.line.color };
-                            borderOpts.line = null;
-
-                            const bw = style[`border${b.side}Width`] || 0;
-                            const bwInchesX = toInchesX(bw);
-                            const bwInchesY = toInchesY(bw);
-
-                            switch (b.side) {
-                                case "Top":
-                                    borderOpts.x = x;
-                                    borderOpts.y = y;
-                                    borderOpts.w = w;
-                                    borderOpts.h = bwInchesY;
-                                    break;
-                                case "Bottom":
-                                    borderOpts.x = x;
-                                    borderOpts.y = y + h - bwInchesY;
-                                    borderOpts.w = w;
-                                    borderOpts.h = bwInchesY;
-                                    break;
-                                case "Left":
-                                    borderOpts.x = x;
-                                    borderOpts.y = y;
-                                    borderOpts.w = bwInchesX;
-                                    borderOpts.h = h;
-                                    break;
-                                case "Right":
-                                    borderOpts.x = x + w - bwInchesX;
-                                    borderOpts.y = y;
-                                    borderOpts.w = bwInchesX;
-                                    borderOpts.h = h;
-                                    break;
-                            }
-
-                            slide.addShape(pres.ShapeType.rect, borderOpts);
-                        }
-                    }
+                    drawPerSideBorders(slide, lineResult, basePos);
 
                     break;
                 }
@@ -323,20 +371,16 @@ export async function generatePresentation(scene, outputFile = null) {
                         opts.align = style.textAlign;
                     }
 
-                    // Character spacing (letter-spacing in px -> pt)
-                    // PptxGenJS charSpacing only supports positive values 1-256
+                    // Character spacing (CSS px -> PowerPoint points). The
+                    // OOXML serializer accepts signed tracking values as well.
                     if (style.letterSpacing) {
-                        const cs = style.letterSpacing * 0.75;
-                        if (cs >= 1) {
-                            opts.charSpacing = cs;
-                        }
+                        opts.charSpacing = style.letterSpacing * 0.75;
                     }
 
-                    // Line height -> lineSpacingMultiple (ratio)
-                    // CSS lineHeight is in px. Convert to a ratio relative to fontSize.
-                    if (style.lineHeight > 0 && style.fontSize > 0) {
-                        opts.lineSpacingMultiple = style.lineHeight / style.fontSize;
-                    }
+                    // PptxGenJS lineSpacing is measured in points, matching the
+                    // CSS pixel-to-point conversion used for font size.
+                    const lineHeight = style.lineHeight || (style.fontSize ? style.fontSize * 1.2 : 0);
+                    if (lineHeight > 0) opts.lineSpacing = lineHeight * 0.75;
 
                     // Text decoration
                     if (style.textDecoration === "underline") {
@@ -346,7 +390,7 @@ export async function generatePresentation(scene, outputFile = null) {
                     }
 
                     // Background fill for text box
-                    if (style.background) {
+                    if (style.background && !style.backgroundImage) {
                         opts.fill = {
                             color: normalizeColor(style.background),
                             transparency:
@@ -370,7 +414,7 @@ export async function generatePresentation(scene, outputFile = null) {
 
                     // Border
                     const lineProps = buildLineProps(style);
-                    if (lineProps) opts.line = lineProps;
+                    if (lineProps && !Array.isArray(lineProps)) opts.line = lineProps.line;
 
                     // Shadow
                     if (style.boxShadow) {
@@ -423,7 +467,22 @@ export async function generatePresentation(scene, outputFile = null) {
                         opts.hyperlink = { url: el.href };
                     }
 
-                    slide.addText(text, opts);
+                    const textRuns = Array.isArray(el.runs) && el.runs.length
+                        ? el.runs.map((run) => ({
+                              // Keep boundary spaces: adjacent run spaces carry
+                              // the separation between differently styled text.
+                              text: mapTextTransform(normalizeRunWhitespace(run.text), style.textTransform),
+                              options: { ...textRunOptions(run, style), ...(run.breakLine ? { breakLine: true } : {}) },
+                          }))
+                        : null;
+                    if (textRuns && textRuns.some((run) => run.options.breakLine || run.text.includes("\n"))) {
+                        // The extractor records Chromium's actual line breaks.
+                        // Prevent PowerPoint's different font metrics from
+                        // introducing additional wraps inside those lines.
+                        opts.wrap = false;
+                    }
+                    slide.addText(textRuns || mapTextTransform(text, style.textTransform), opts);
+                    drawPerSideBorders(slide, lineProps, basePos);
                     break;
                 }
 
@@ -437,7 +496,7 @@ export async function generatePresentation(scene, outputFile = null) {
                     if (el.href) opts.hyperlink = { url: el.href };
                     if (style.rotate) opts.rotate = style.rotate;
 
-                    if (el.src?.startsWith("data:")) opts.data = el.src;
+                    if (el.src?.startsWith("data:")) opts.data = el.src.replace(/^data:/i, "");
                     else opts.path = el.src;
 
                     // Object-fit sizing
@@ -454,14 +513,21 @@ export async function generatePresentation(scene, outputFile = null) {
                         };
                     }
 
-                    // Border radius -> PptxGenJS only supports full rounding
-                    // (circle). For partial rounding, we skip since there's
-                    // no native support for rounded-rectangle images.
+                    // PptxGenJS supports circular picture crops. It cannot
+                    // natively clip a picture to an arbitrary rounded rectangle.
                     const radius = radiusValue(style.borderRadius);
                     if (radius > 0) {
                         const minDim = Math.min(frame.width, frame.height);
                         if (radius >= minDim / 2) {
                             opts.rounding = true;
+                        } else if (el.src?.startsWith("data:")) {
+                            const clippedData = roundedImageSvg(el.src, frame, style.borderRadius, style.objectFit);
+                            if (clippedData) {
+                                opts.data = clippedData;
+                                delete opts.path;
+                                delete opts.sizing;
+                                delete opts.rounding;
+                            }
                         }
                     }
 
@@ -479,7 +545,7 @@ export async function generatePresentation(scene, outputFile = null) {
 
                     slide.addImage(opts);
 
-                    // PPTX images have no line option, so overlay a vector border.
+                    // PPTX images have no line option, so overlay editable vector borders.
                     const imageBorders = buildLineProps(style);
                     if (imageBorders && !Array.isArray(imageBorders)) {
                         const radius = radiusValue(style.borderRadius);
@@ -496,23 +562,8 @@ export async function generatePresentation(scene, outputFile = null) {
                         } else {
                             slide.addShape(pres.ShapeType.rect, outline);
                         }
-                    } else if (imageBorders) {
-                        for (const border of imageBorders) {
-                            const borderPx = style[`border${border.side}Width`] || 0;
-                            const borderX = toInchesX(borderPx);
-                            const borderY = toInchesY(borderPx);
-                            const borderOpts = {
-                                ...basePos,
-                                fill: { color: border.line.color },
-                                line: null,
-                            };
-                            if (border.side === "Top") borderOpts.h = borderY;
-                            if (border.side === "Bottom") { borderOpts.y += h - borderY; borderOpts.h = borderY; }
-                            if (border.side === "Left") borderOpts.w = borderX;
-                            if (border.side === "Right") { borderOpts.x += w - borderX; borderOpts.w = borderX; }
-                            slide.addShape(pres.ShapeType.rect, borderOpts);
-                        }
                     }
+                    drawPerSideBorders(slide, imageBorders, basePos);
                     break;
                 }
             }

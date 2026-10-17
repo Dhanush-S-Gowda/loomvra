@@ -58,6 +58,7 @@ export default async function getSupportedModels() {
      grouped.get(provider).push({
         id: model.id,
         name: modelName,
+        context_length: Number(model.context_length) || 32768,
         pricing: {
           promptPerM:
             Number(model.pricing?.prompt ?? 0) * 1_000_000,

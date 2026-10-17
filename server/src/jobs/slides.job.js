@@ -186,6 +186,10 @@ export async function generateSlides(data) {
         path.join(promptsDir, "slides.html.md"),
         "utf-8"
     );
+    const customPrompt = settings.slides_custom_prompt?.trim();
+    const appendCustomPrompt = (prompt) => customPrompt
+        ? `${prompt}\n\n[ADDITIONAL USER INSTRUCTIONS]\n${customPrompt}`
+        : prompt;
 
     // -----------------------------------------------------------------
     // 3. Step 1 — generate the master template with structured output.
@@ -196,6 +200,7 @@ export async function generateSlides(data) {
         project: designPlan.project,
         globalDesign: designPlan.globalDesign,
         masterTemplate: designPlan.masterTemplate,
+      brand: designPlan.brand || null,
         // Include the user's original project description so the master
         // template stays aligned with the user's intent.
         userDescription: project.user_desc || "",
@@ -210,7 +215,7 @@ export async function generateSlides(data) {
         masterTemplate = await generateValidatedSlide({
             apiKey,
             model: resolvedModel,
-            systemPrompt: masterPromptText,
+            systemPrompt: appendCustomPrompt(masterPromptText),
             userPrompt: JSON.stringify(masterUserPayload),
             label: "Master template",
             onChunk: ({ contentLength }) => {
@@ -257,7 +262,7 @@ export async function generateSlides(data) {
             const slide = await generateValidatedSlide({
                 apiKey,
                 model: resolvedModel,
-                systemPrompt: slidePromptText,
+                systemPrompt: appendCustomPrompt(slidePromptText),
                 userPrompt,
                 label: `Slide ${seqNum}`,
                 onChunk: ({ contentLength }) => {

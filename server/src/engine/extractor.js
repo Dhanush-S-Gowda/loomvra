@@ -1,7 +1,4 @@
 export default () => {
-    // =====================================
-    // HELPERS
-    // =====================================
 
     function px(value) {
         if (!value) return 0;
@@ -16,6 +13,21 @@ export default () => {
             bottomRight: px(style.borderBottomRightRadius),
             bottomLeft: px(style.borderBottomLeftRadius),
         };
+    }
+
+    function imageClipRadii(element, imageRect, imageStyle) {
+        const ownRadius = borderRadii(imageStyle);
+        if (Math.max(...Object.values(ownRadius)) > 0) return ownRadius;
+        for (let parent = element.parentElement; parent && parent !== document.querySelector(".slide"); parent = parent.parentElement) {
+            const style = window.getComputedStyle(parent);
+            if (!/hidden|clip/.test(`${style.overflow} ${style.overflowX} ${style.overflowY}`)) continue;
+            const radii = borderRadii(style);
+            if (Math.max(...Object.values(radii)) <= 0) continue;
+            const rect = parent.getBoundingClientRect();
+            const sameFrame = Math.abs(rect.x - imageRect.x) < 1 && Math.abs(rect.y - imageRect.y) < 1 && Math.abs(rect.width - imageRect.width) < 1 && Math.abs(rect.height - imageRect.height) < 1;
+            if (sameFrame) return radii;
+        }
+        return ownRadius;
     }
 
     function rgbaToHex(color) {
@@ -62,6 +74,192 @@ export default () => {
         }
 
         return parseFloat(nums[3]);
+    }
+
+    function textRun(text, element) {
+        const runStyle = window.getComputedStyle(element);
+        return {
+            text,
+            style: {
+                fontFamily: runStyle.fontFamily,
+                fontSize: px(runStyle.fontSize),
+                fontWeight: parseInt(runStyle.fontWeight) || 400,
+                fontStyle: runStyle.fontStyle,
+                color: rgbaToHex(runStyle.color),
+                colorAlpha: rgbaToAlpha(runStyle.color),
+                textDecoration: runStyle.textDecorationLine || runStyle.textDecoration,
+                letterSpacing: px(runStyle.letterSpacing),
+            },
+        };
+    }
+
+    function glyphImage(text, style, rect, slideRect) {
+        if (!rect.width || !rect.height) return null;
+        const scale = 3;
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.ceil(rect.width * scale));
+        canvas.height = Math.max(1, Math.ceil(rect.height * scale));
+        const context = canvas.getContext("2d");
+        context.scale(scale, scale);
+        context.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+        context.fillStyle = style.color;
+        context.textAlign = "center";
+        context.textBaseline = "middle";
+        context.fillText(text, rect.width / 2, rect.height / 2);
+        return {
+            kind: "image",
+            src: canvas.toDataURL("image/png"),
+            alt: text,
+            frame: {
+                x: rect.x - slideRect.x,
+                y: rect.y - slideRect.y,
+                width: rect.width,
+                height: rect.height,
+            },
+            style: { objectFit: "contain", opacity: parseFloat(style.opacity) || 1, zIndex: getZIndex(style) },
+        };
+    }
+
+    function splitCssArguments(value) {
+        const parts = [];
+        let depth = 0;
+        let start = 0;
+        for (let i = 0; i < value.length; i += 1) {
+            if (value[i] === "(") depth += 1;
+            else if (value[i] === ")") depth -= 1;
+            else if (value[i] === "," && depth === 0) {
+                parts.push(value.slice(start, i).trim());
+                start = i + 1;
+            }
+        }
+        parts.push(value.slice(start).trim());
+        return parts;
+    }
+
+    function gradientDataUrl(backgroundImage, width, height) {
+        const match = String(backgroundImage || "").match(/^(linear|radial)-gradient\((.*)\)$/i);
+        if (!match) return null;
+        const type = match[1].toLowerCase();
+        const args = splitCssArguments(match[2]);
+        if (args.length < 2) return null;
+        let orientation = "";
+        if (/^(?:to\s|[-+]?\d*\.?\d+(?:deg|turn|rad)\b|(?:circle|ellipse)\b)/i.test(args[0])) orientation = args.shift();
+        const stops = args.map((arg, index) => {
+            const stop = arg.match(/^(rgba?\([^)]*\)|#[\da-f]{3,8}|[a-z]+)\s*(-?[\d.]+%)?$/i);
+            if (!stop) return null;
+            const hex = rgbaToHex(stop[1]);
+            if (!hex) return null;
+            return `<stop offset="${stop[2] || `${Math.round((index / Math.max(args.length - 1, 1)) * 100)}%`}" stop-color="${hex}" stop-opacity="${rgbaToAlpha(stop[1])}"/>`;
+        });
+        if (stops.some((stop) => !stop)) return null;
+        let gradient;
+        if (type === "linear") {
+            let x1 = "0%", y1 = "0%", x2 = "0%", y2 = "100%";
+            if (/^to\s+right/i.test(orientation)) [x2, y2] = ["100%", "0%"];
+            else if (/^to\s+left/i.test(orientation)) [x1, x2, y2] = ["100%", "0%", "0%"];
+            else if (/^to\s+top/i.test(orientation)) [y1, y2] = ["100%", "0%"];
+            else if (/(-?[\d.]+)deg/i.test(orientation)) {
+                const degrees = parseFloat(orientation) * Math.PI / 180;
+                const dx = Math.sin(degrees) * 50;
+                const dy = -Math.cos(degrees) * 50;
+                x1 = `${50 - dx}%`; y1 = `${50 - dy}%`; x2 = `${50 + dx}%`; y2 = `${50 + dy}%`;
+            }
+            gradient = `<linearGradient id="g" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}">${stops.join("")}</linearGradient>`;
+        } else {
+            gradient = `<radialGradient id="g" cx="50%" cy="50%" r="70%">${stops.join("")}</radialGradient>`;
+        }
+        const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><defs>${gradient}</defs><rect width="100%" height="100%" fill="url(#g)"/></svg>`;
+        return `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(svg)))}`;
+    }
+
+    function backgroundImageElement(style, rect, slideRect, zIndex) {
+        if (!style.backgroundImage || style.backgroundImage === "none") return null;
+        const data = gradientDataUrl(style.backgroundImage, rect.width, rect.height);
+        const url = style.backgroundImage.match(/url\(["']?(.*?)["']?\)/i)?.[1];
+        const src = data || url;
+        if (!src) return null;
+        const size = String(style.backgroundSize || "").split(",")[0].trim();
+        const objectFit = size === "cover" ? "cover" : size === "contain" ? "contain" : "fill";
+        return {
+            kind: "image",
+            src,
+            alt: "CSS background image",
+            frame: { x: rect.x - slideRect.x, y: rect.y - slideRect.y, width: rect.width, height: rect.height },
+            style: {
+                objectFit,
+                objectPosition: style.backgroundPosition,
+                borderRadius: borderRadii(style),
+                opacity: parseFloat(style.opacity) || 1,
+                zIndex,
+                borderTopWidth: px(style.borderTopWidth),
+                borderRightWidth: px(style.borderRightWidth),
+                borderBottomWidth: px(style.borderBottomWidth),
+                borderLeftWidth: px(style.borderLeftWidth),
+                borderTopColor: rgbaToHex(style.borderTopColor),
+                borderTopAlpha: rgbaToAlpha(style.borderTopColor),
+                borderRightColor: rgbaToHex(style.borderRightColor),
+                borderRightAlpha: rgbaToAlpha(style.borderRightColor),
+                borderBottomColor: rgbaToHex(style.borderBottomColor),
+                borderBottomAlpha: rgbaToAlpha(style.borderBottomColor),
+                borderLeftColor: rgbaToHex(style.borderLeftColor),
+                borderLeftAlpha: rgbaToAlpha(style.borderLeftColor),
+                borderTopStyle: style.borderTopStyle,
+                borderRightStyle: style.borderRightStyle,
+                borderBottomStyle: style.borderBottomStyle,
+                borderLeftStyle: style.borderLeftStyle,
+            },
+        };
+    }
+
+    function textRunWithEmojiImages(node, owner, slideRect) {
+        const original = node.textContent;
+        const style = window.getComputedStyle(node.parentElement || owner);
+        if (typeof Intl.Segmenter !== "function") return textRun(original, node.parentElement || owner);
+        const segments = [...new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(original)];
+        let output = "";
+        let previousTop = null;
+        for (const part of segments) {
+            const glyph = part.segment;
+            if (/^\s+$/u.test(glyph)) {
+                if (output && !output.endsWith(" ") && !output.endsWith("\n")) output += " ";
+                continue;
+            }
+            const range = document.createRange();
+            range.setStart(node, part.index);
+            range.setEnd(node, part.index + glyph.length);
+            const rect = range.getBoundingClientRect();
+            if (previousTop !== null && rect.height && Math.abs(rect.top - previousTop) > 1) output += "\n";
+            if (rect.height) previousTop = rect.top;
+
+            if (!/\p{Extended_Pictographic}/u.test(glyph)) {
+                output += glyph;
+                continue;
+            }
+            const glyphStyle = {
+                fontStyle: style.fontStyle,
+                fontWeight: style.fontWeight,
+                fontSize: style.fontSize,
+                fontFamily: style.fontFamily,
+                color: style.color,
+                opacity: style.opacity,
+            };
+            const image = glyphImage(glyph, glyphStyle, rect, slideRect);
+            if (image) scene.slides[0].elements.push(image);
+            // Replace the font-dependent emoji with an em space of roughly the
+            // same advance. The glyph itself is preserved as a transparent PNG.
+            const emSpaces = Math.max(1, Math.round(rect.width / Math.max(parseFloat(style.fontSize), 1)));
+            output += "\u2003".repeat(emSpaces);
+        }
+        const normalized = output
+            .split("\n")
+            .map((line) => line.replace(/[ \t\r\f\v]+/g, " ").trim())
+            .join("\n")
+            .trim();
+        const trailingInlineSpace = /[ \t]+$/.test(original) && !/[\r\n]/.test(original);
+        const renderedText = trailingInlineSpace ? `${normalized} ` : normalized;
+        const bounds = document.createRange();
+        bounds.selectNodeContents(node);
+        return { ...textRun(renderedText, node.parentElement || owner), lineTop: bounds.getBoundingClientRect().top };
     }
 
     function getZIndex(style) {
@@ -206,27 +404,16 @@ export default () => {
         if (["i", "span", "div"].includes(tag)) {
             const glyph = pseudoGlyph(el, "::before") || pseudoGlyph(el, "::after");
             if (glyph) {
-                scene.slides[0].elements.push({
-                    kind: "text",
-                    text: glyph.text,
-                    frame: { x, y, width: rect.width, height: rect.height },
-                    style: {
-                        fontFamily: glyph.style.fontFamily,
-                        fontSize: px(glyph.style.fontSize),
-                        fontWeight: parseInt(glyph.style.fontWeight) || 400,
-                        fontStyle: glyph.style.fontStyle,
-                        color: rgbaToHex(glyph.style.color),
-                        textAlign: "center",
-                        lineHeight: px(glyph.style.lineHeight),
-                        opacity: parseFloat(glyph.style.opacity),
-                        whiteSpace: "nowrap",
-                        paddingTop: 0,
-                        paddingRight: 0,
-                        paddingBottom: 0,
-                        paddingLeft: 0,
-                        zIndex: getZIndex(style),
-                    },
-                });
+                const glyphStyle = {
+                    fontStyle: glyph.style.fontStyle,
+                    fontWeight: glyph.style.fontWeight,
+                    fontSize: glyph.style.fontSize,
+                    fontFamily: glyph.style.fontFamily,
+                    color: glyph.style.color,
+                    opacity: glyph.style.opacity,
+                };
+                const image = glyphImage(glyph.text, glyphStyle, rect, slideRect);
+                if (image) scene.slides[0].elements.push(image);
                 if (tag === "i") return;
             }
         }
@@ -251,7 +438,7 @@ export default () => {
                 },
 
                 style: {
-                    borderRadius: borderRadii(style),
+                    borderRadius: imageClipRadii(el, rect, style),
                     objectFit: style.objectFit,
                     objectPosition: style.objectPosition,
                     rotate: 0,
@@ -262,9 +449,13 @@ export default () => {
                     borderBottomWidth: px(style.borderBottomWidth),
                     borderLeftWidth: px(style.borderLeftWidth),
                     borderTopColor: rgbaToHex(style.borderTopColor),
+                    borderTopAlpha: rgbaToAlpha(style.borderTopColor),
                     borderRightColor: rgbaToHex(style.borderRightColor),
+                    borderRightAlpha: rgbaToAlpha(style.borderRightColor),
                     borderBottomColor: rgbaToHex(style.borderBottomColor),
+                    borderBottomAlpha: rgbaToAlpha(style.borderBottomColor),
                     borderLeftColor: rgbaToHex(style.borderLeftColor),
+                    borderLeftAlpha: rgbaToAlpha(style.borderLeftColor),
                     borderTopStyle: style.borderTopStyle,
                     borderRightStyle: style.borderRightStyle,
                     borderBottomStyle: style.borderBottomStyle,
@@ -286,12 +477,18 @@ export default () => {
         const ownTextNodes = Array.from(el.childNodes).filter(
             (node) =>
                 node.nodeType === Node.TEXT_NODE &&
-                node.textContent.trim().length > 0,
+                node.textContent.length > 0,
         );
 
-        const ownText = ownTextNodes
-            .map((node) => node.textContent.trim())
-            .join(" ");
+        const extractedRuns = ownTextNodes.map((node) =>
+            textRunWithEmojiImages(node, el, slideRect),
+        );
+        for (let i = 0; i < extractedRuns.length - 1; i += 1) {
+            if (extractedRuns[i + 1].lineTop > extractedRuns[i].lineTop + 1) {
+                extractedRuns[i].breakLine = true;
+            }
+        }
+        const ownText = extractedRuns.map((run) => run.text).join("");
 
         const hasDirectText = ownText.length > 0;
 
@@ -351,6 +548,7 @@ export default () => {
                 kind: "text",
 
                 text: ownText,
+                runs: extractedRuns,
 
                 frame: {
                     x: frameRect.x - slideRect.x,
@@ -368,15 +566,32 @@ export default () => {
                     lineHeight: px(style.lineHeight),
                     letterSpacing: px(style.letterSpacing),
                     textDecoration: style.textDecoration,
+                    textDecorationLine: style.textDecorationLine || style.textDecoration,
                     textTransform: style.textTransform,
+                    textIndent: px(style.textIndent),
+                    wordSpacing: px(style.wordSpacing),
+                    textAlignLast: style.textAlignLast,
+                    direction: style.direction,
                     verticalAlign: style.verticalAlign,
                     whiteSpace: style.whiteSpace,
                     wordBreak: style.wordBreak,
+                    overflowWrap: style.overflowWrap,
+                    textOverflow: style.textOverflow,
+                    writingMode: style.writingMode,
+                    fontVariant: style.fontVariant,
+                    fontStretch: style.fontStretch,
+                    lineHeightValue: style.lineHeight,
                     color: rgbaToHex(style.color),
+                    colorAlpha: rgbaToAlpha(style.color),
                     textAlign: style.textAlign,
                     // Visual properties
                     background: rgbaToHex(style.backgroundColor),
                     backgroundAlpha: rgbaToAlpha(style.backgroundColor),
+                    backgroundImage: style.backgroundImage !== "none" ? style.backgroundImage : null,
+                    backgroundSize: style.backgroundSize,
+                    backgroundPosition: style.backgroundPosition,
+                    backgroundRepeat: style.backgroundRepeat,
+                    backgroundBlendMode: style.backgroundBlendMode,
                     opacity: parseFloat(style.opacity),
                     // Border properties (all sides individually)
                     borderTopWidth: px(style.borderTopWidth),
@@ -384,9 +599,13 @@ export default () => {
                     borderBottomWidth: px(style.borderBottomWidth),
                     borderLeftWidth: px(style.borderLeftWidth),
                     borderTopColor: rgbaToHex(style.borderTopColor),
+                    borderTopAlpha: rgbaToAlpha(style.borderTopColor),
                     borderRightColor: rgbaToHex(style.borderRightColor),
+                    borderRightAlpha: rgbaToAlpha(style.borderRightColor),
                     borderBottomColor: rgbaToHex(style.borderBottomColor),
+                    borderBottomAlpha: rgbaToAlpha(style.borderBottomColor),
                     borderLeftColor: rgbaToHex(style.borderLeftColor),
+                    borderLeftAlpha: rgbaToAlpha(style.borderLeftColor),
                     borderTopStyle: style.borderTopStyle,
                     borderRightStyle: style.borderRightStyle,
                     borderBottomStyle: style.borderBottomStyle,
@@ -427,6 +646,8 @@ export default () => {
                 textObj.href = el.href || "";
             }
 
+            const textBackground = backgroundImageElement(style, frameRect, slideRect, getZIndex(style));
+            if (textBackground) scene.slides[0].elements.push(textBackground);
             scene.slides[0].elements.push(textObj);
 
             return;
@@ -437,6 +658,7 @@ export default () => {
         // =================================
 
         const hasBackground = hasVisualBackground(style);
+        const hasBackgroundImage = style.backgroundImage && style.backgroundImage !== "none";
 
         const hasBorder =
             px(style.borderTopWidth) > 0 ||
@@ -449,7 +671,7 @@ export default () => {
             style.boxShadow !== "none" &&
             style.boxShadow !== "";
 
-        const meaningfulShape = hasBackground || hasBorder || hasShadow;
+        const meaningfulShape = hasBackground || hasBackgroundImage || hasBorder || hasShadow;
 
         if (meaningfulShape) {
             scene.slides[0].elements.push({
@@ -465,6 +687,11 @@ export default () => {
                 style: {
                     background: rgbaToHex(style.backgroundColor),
                     backgroundAlpha: rgbaToAlpha(style.backgroundColor),
+                    backgroundImage: style.backgroundImage !== "none" ? style.backgroundImage : null,
+                    backgroundSize: style.backgroundSize,
+                    backgroundPosition: style.backgroundPosition,
+                    backgroundRepeat: style.backgroundRepeat,
+                    backgroundBlendMode: style.backgroundBlendMode,
                     borderRadius: borderRadii(style),
                     // Border properties (all sides individually)
                     borderTopWidth: px(style.borderTopWidth),
@@ -472,9 +699,13 @@ export default () => {
                     borderBottomWidth: px(style.borderBottomWidth),
                     borderLeftWidth: px(style.borderLeftWidth),
                     borderTopColor: rgbaToHex(style.borderTopColor),
+                    borderTopAlpha: rgbaToAlpha(style.borderTopColor),
                     borderRightColor: rgbaToHex(style.borderRightColor),
+                    borderRightAlpha: rgbaToAlpha(style.borderRightColor),
                     borderBottomColor: rgbaToHex(style.borderBottomColor),
+                    borderBottomAlpha: rgbaToAlpha(style.borderBottomColor),
                     borderLeftColor: rgbaToHex(style.borderLeftColor),
+                    borderLeftAlpha: rgbaToAlpha(style.borderLeftColor),
                     borderTopStyle: style.borderTopStyle,
                     borderRightStyle: style.borderRightStyle,
                     borderBottomStyle: style.borderBottomStyle,
@@ -493,8 +724,16 @@ export default () => {
                     marginBottom: px(style.marginBottom),
                     marginLeft: px(style.marginLeft),
                     opacity: parseFloat(style.opacity),
+                    overflow: style.overflow,
+                    clipPath: style.clipPath !== "none" ? style.clipPath : null,
+                    transform: style.transform !== "none" ? style.transform : null,
+                    transformOrigin: style.transformOrigin,
+                    filter: style.filter !== "none" ? style.filter : null,
+                    mixBlendMode: style.mixBlendMode,
                     zIndex: getZIndex(style),                },
             });
+            const backgroundImage = backgroundImageElement(style, rect, slideRect, getZIndex(style));
+            if (backgroundImage) scene.slides[0].elements.push(backgroundImage);
         }
     });
 

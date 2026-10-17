@@ -1,5 +1,4 @@
 import { useState, useCallback } from 'react';
-import { useNavigate } from 'react-router';
 import { toast } from "sonner";
 import { startCrafting, updateProject as saveProject, resolveImageUrl } from '@/lib/api';
 import { GridPulse } from '@/components/GridLoadingScreen';
@@ -132,7 +131,6 @@ function DesignPlan({ data, projectId }) {
   const [imagePickerOpen, setImagePickerOpen] = useState(false);
   const [imagePickerTarget, setImagePickerTarget] = useState(null); // { slideNumber, imgIndex } or { slideNumber } for new
   const [crafting, setCrafting] = useState(false);
-  const navigate = useNavigate();
 
   const [saving, setSaving] = useState(false);
 
@@ -295,17 +293,17 @@ function DesignPlan({ data, projectId }) {
     }
     setCrafting(true);
     try {
-      const result = await startCrafting(projectId);
-      toast.success(result.message || "Slide generation started!");
-      // Navigate back to project page so it starts polling
-      navigate(`/dashboard/project/${projectId}`, { replace: true });
+      await startCrafting(projectId);
+      // Reload the project route after the server queues slide generation so
+      // Project fetches its new state and starts the slide progress screen.
+      window.location.reload();
     } catch (err) {
       toast.error(err.message);
       setCrafting(false);
     }
   };
 
-  const { project, globalDesign, masterTemplate } = plan;
+  const { project, globalDesign, masterTemplate, brand } = plan;
 
   const isEditingProject = editingSection === 'project';
   const isEditingGlobalDesign = editingSection === 'globalDesign';
@@ -407,6 +405,53 @@ function DesignPlan({ data, projectId }) {
           </CardContent>
         </Card>
       </section>
+
+      {brand && (
+        <section className="space-y-4">
+          <div className="flex items-center gap-2">
+            <Palette className="size-5 text-primary" />
+            <h2 className="font-heading text-xl font-medium">Brand Direction</h2>
+          </div>
+          <Card className="border-l-4 border-l-primary/40">
+            <CardContent className="space-y-5 pt-5">
+              {brand.palette && Object.keys(brand.palette).length > 0 && (
+                <div>
+                  <p className="mb-3 text-xs uppercase tracking-wider text-muted-foreground">Palette</p>
+                  <div className="flex flex-wrap gap-5">
+                    {Object.entries(brand.palette).map(([name, value]) => (
+                      <div key={name} className="flex items-center gap-2">
+                        <span className="size-6 rounded-md ring-1 ring-foreground/10" style={{ backgroundColor: value }} />
+                        <span className="text-sm"><span className="capitalize">{name}</span>: {value}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {brand.fonts && Object.keys(brand.fonts).length > 0 && (
+                <div>
+                  <p className="mb-2 text-xs uppercase tracking-wider text-muted-foreground">Fonts</p>
+                  <p className="text-sm">{Object.entries(brand.fonts).map(([name, value]) => `${name === 'heading' ? 'Heading' : 'Body'}: ${value}`).join(' · ')}</p>
+                </div>
+              )}
+              {brand.guidance && (
+                <div>
+                  <p className="mb-2 text-xs uppercase tracking-wider text-muted-foreground">Brand direction</p>
+                  <p className="whitespace-pre-wrap text-sm leading-relaxed">{brand.guidance}</p>
+                </div>
+              )}
+              {brand.logoUrl && (
+                <div className="flex items-center gap-3">
+                  <img src={resolveImageUrl(brand.logoUrl)} alt="Uploaded brand logo" className="max-h-12 max-w-36 object-contain" />
+                  <div>
+                    <p className="text-xs uppercase tracking-wider text-muted-foreground">Brand logo</p>
+                    <p className="mt-1 text-sm font-medium">Included in the master design direction</p>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </section>
+      )}
 
       {/* Global Design */}
       <section className="space-y-4">

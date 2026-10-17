@@ -75,12 +75,37 @@ router.get("/all-projects", (req, res) => {
 
 router.post("/create-project", async (req, res) => {
  try {
-  const { name, userDesc } = req.body;
+  const { name, userDesc, brand: submittedBrand = {}, logoData } = req.body;
 
   if (!name || !userDesc) {
    return res.status(400).json({
      error: "name and userDesc are required",
    });
+  }
+
+  const palette = {};
+  for (const key of ["primary", "secondary", "tertiary"]) {
+   const value = submittedBrand?.palette?.[key];
+   if (value !== undefined && value !== null && String(value).trim()) {
+    if (typeof value !== "string" || value.length > 64) {
+     return res.status(400).json({ error: `brand.palette.${key} must be text no longer than 64 characters.` });
+    }
+    palette[key] = value.trim();
+   }
+  }
+  const fonts = {};
+  for (const key of ["heading", "body"]) {
+   const value = submittedBrand?.fonts?.[key];
+   if (value !== undefined && value !== null && String(value).trim()) {
+    if (typeof value !== "string" || value.length > 120) {
+     return res.status(400).json({ error: `brand.fonts.${key} must be text no longer than 120 characters.` });
+    }
+    fonts[key] = value.trim();
+   }
+  }
+  const guidance = typeof submittedBrand?.guidance === "string" ? submittedBrand.guidance.trim().slice(0, 4000) : "";
+  if (logoData !== undefined && (typeof logoData !== "string" || !logoData.startsWith("data:image/"))) {
+   return res.status(400).json({ error: "logoData must be an uploaded image data URL." });
   }
 
   if (checkProjectNameExists(name)) {
@@ -116,10 +141,17 @@ router.post("/create-project", async (req, res) => {
   const projectId = createProject(name, userDesc);
 
   try {
+    const logoUrl = logoData ? await saveBase64Image(projectId, logoData) : null;
     await designQueue.add("generate-design-plan", {
       projectId,
       userInput: userDesc,
       model,
+      brand: {
+        ...(Object.keys(palette).length ? { palette } : {}),
+        ...(Object.keys(fonts).length ? { fonts } : {}),
+        ...(guidance ? { guidance } : {}),
+        ...(logoUrl ? { logoUrl } : {}),
+      },
     });
   } catch (err) {
     // If the queue add fails, mark the project as failed so the state isn't stuck.
