@@ -1,6 +1,7 @@
 import { ArrowRight, ArrowUpRight, Layers3, WandSparkles } from 'lucide-react';
 import { Link } from 'react-router';
 import { Button } from '@/components/ui/button';
+import BrandLogo from '@/components/BrandLogo';
 
 const steps = [
   {
@@ -24,14 +25,14 @@ function Home() {
   return (
     <main className="relative isolate min-h-screen overflow-x-clip bg-background text-foreground">
       <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
-        <div className="absolute -left-24 -top-28 size-96 rounded-full bg-[radial-gradient(circle,var(--blob-coral),transparent_68%)] opacity-35 blur-3xl dark:opacity-25" />
-        <div className="absolute right-[-9rem] top-28 size-[32rem] rounded-full bg-[radial-gradient(circle,var(--blob-purple),transparent_68%)] opacity-30 blur-3xl dark:opacity-20" />
-        <div className="absolute bottom-[-15rem] left-1/3 size-[34rem] rounded-full bg-[radial-gradient(circle,var(--blob-teal),transparent_68%)] opacity-20 blur-3xl dark:opacity-15" />
+        <div className="absolute -left-24 -top-28 size-96 rounded-full bg-[radial-gradient(circle,var(--blob-green),transparent_68%)] opacity-25 blur-3xl dark:opacity-20" />
+        <div className="absolute right-[-9rem] top-28 size-[32rem] rounded-full bg-[radial-gradient(circle,var(--blob-slate),transparent_68%)] opacity-20 blur-3xl dark:opacity-15" />
+        <div className="absolute bottom-[-15rem] left-1/3 size-[34rem] rounded-full bg-[radial-gradient(circle,var(--blob-green),transparent_68%)] opacity-15 blur-3xl dark:opacity-10" />
         <div className="bg-noise absolute inset-0 opacity-[0.035]" />
       </div>
 
       <nav className="mx-auto flex w-full max-w-7xl items-center justify-between px-6 py-6 lg:px-10">
-        <Link to="/" className="font-heading text-2xl tracking-tight">NextGen PPT</Link>
+        <Link to="/" aria-label="loomvra home"><BrandLogo /></Link>
         <Link to="/dashboard">
           <Button variant="ghost" className="gap-2 rounded-full px-4 text-sm">
             Open workspace <ArrowUpRight className="size-4" />
@@ -44,11 +45,11 @@ function Home() {
           <p className="mb-7 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.22em] text-primary">
             <span className="size-2 rounded-full bg-primary" /> From thought to story
           </p>
-          <h1 className="max-w-xl font-heading text-6xl leading-[0.92] tracking-[-0.045em] sm:text-7xl lg:text-[7.6rem]">
+          <h1 className="max-w-xl font-heading text-6xl font-bold leading-[0.92] tracking-[-0.045em] sm:text-7xl lg:text-[7.6rem]">
             Make the idea <span className="text-primary">visible.</span>
           </h1>
           <p className="mt-8 max-w-md text-base leading-7 text-muted-foreground sm:text-lg">
-            Share what you want to say and who needs to hear it. NextGen helps shape the story, build the slides, and create an editable PowerPoint draft.
+            Share what you want to say and who needs to hear it. loomvra helps shape the story, build the slides, and create an editable PowerPoint draft.
           </p>
           <div className="mt-9 flex flex-wrap items-center gap-4">
             <Link to="/dashboard">
@@ -69,7 +70,7 @@ function Home() {
           </div>
           <div className="absolute bottom-5 right-0 z-10 w-[82%] rotate-[5deg] rounded-2xl border border-foreground/10 bg-foreground p-6 text-background shadow-2xl shadow-foreground/20 sm:bottom-0 sm:right-10 sm:p-8 dark:bg-card dark:text-foreground">
             <div className="mb-20 flex items-center justify-between text-[10px] font-semibold uppercase tracking-[0.25em] text-background/55 dark:text-foreground/45">
-              <span>NextGen / 01</span><span>Editable by design</span>
+              <span>loomvra / 01</span><span>Editable by design</span>
             </div>
             <p className="max-w-md font-heading text-4xl leading-[0.95] sm:text-6xl">A deck with a point of view.</p>
             <div className="mt-10 flex items-end justify-between">
@@ -114,7 +115,7 @@ function Home() {
       </section>
 
       <footer className="mx-auto flex max-w-7xl items-center justify-between border-t border-border/70 px-6 py-6 text-xs text-muted-foreground lg:px-10">
-        <span>NextGen PPT</span>
+        <span>loomvra</span>
         <span>Make something worth presenting.</span>
       </footer>
     </main>

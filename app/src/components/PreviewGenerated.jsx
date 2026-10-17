@@ -124,7 +124,7 @@ const SlideThumbnail = forwardRef(function SlideThumbnail(
           onClick();
         }
       }}
-      className={`group relative rounded-lg border-2 transition-all overflow-hidden bg-white select-none cursor-pointer shrink-0 ${
+      className={`group relative rounded-lg border-2 transition-all overflow-hidden bg-card select-none cursor-pointer shrink-0 ${
         isActive
           ? 'border-primary ring-1 ring-primary'
           : 'border-transparent hover:border-muted-foreground/30'
@@ -199,9 +199,9 @@ function SlideViewer({ slide, zoom, onZoomIn, onZoomOut, className, style, ifram
 
 function EndScreen() {
   return (
-    <div className="w-full h-full bg-black flex flex-col items-center justify-center text-white">
+    <div className="w-full h-full bg-presentation flex flex-col items-center justify-center text-presentation-foreground">
       <p className="text-3xl font-semibold mb-4">End of Presentation</p>
-      <p className="text-white/60 text-lg">Press ESC to exit</p>
+      <p className="text-presentation-foreground/60 text-lg">Press ESC to exit</p>
     </div>
   );
 }
@@ -252,7 +252,7 @@ function PresentationMode({ slides, startIndex, onClose }) {
   return (
     <div
       ref={containerRef}
-      className="fixed inset-0 z-50 bg-black flex flex-col items-center justify-center"
+      className="fixed inset-0 z-50 bg-presentation text-presentation-foreground flex flex-col items-center justify-center"
     >
       <div className="relative w-full h-full flex items-center justify-center">
         {/* Slide container with aspect ratio preservation */}
@@ -274,35 +274,35 @@ function PresentationMode({ slides, startIndex, onClose }) {
         <button
           onClick={goPrev}
           disabled={isFirst}
-          className="absolute left-4 top-1/2 -translate-y-1/2 p-3 rounded-full bg-white/10 hover:bg-white/20 disabled:opacity-30 disabled:hover:bg-white/10 text-white transition"
+          className="absolute left-4 top-1/2 -translate-y-1/2 p-3 rounded-full bg-presentation-foreground/10 hover:bg-presentation-foreground/20 disabled:opacity-30 disabled:hover:bg-presentation-foreground/10 text-presentation-foreground transition"
         >
           <ChevronLeft className="w-8 h-8" />
         </button>
         <button
           onClick={goNext}
           disabled={isLast}
-          className="absolute right-4 top-1/2 -translate-y-1/2 p-3 rounded-full bg-white/10 hover:bg-white/20 disabled:opacity-30 disabled:hover:bg-white/10 text-white transition"
+          className="absolute right-4 top-1/2 -translate-y-1/2 p-3 rounded-full bg-presentation-foreground/10 hover:bg-presentation-foreground/20 disabled:opacity-30 disabled:hover:bg-presentation-foreground/10 text-presentation-foreground transition"
         >
           <ChevronRight className="w-8 h-8" />
         </button>
 
         {/* Top bar */}
-        <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-6 py-4 bg-linear-to-b from-black/60 to-transparent">
-          <span className="text-white/80 text-sm font-medium">
+        <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-6 py-4 bg-linear-to-b from-overlay/60 to-transparent">
+          <span className="text-presentation-foreground/80 text-sm font-medium">
             {currentIndex < slides.length
               ? `Slide ${currentIndex + 1} / ${slides.length}`
               : 'End'}
           </span>
           <button
             onClick={onClose}
-            className="p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition"
+            className="p-2 rounded-full bg-presentation-foreground/10 hover:bg-presentation-foreground/20 text-presentation-foreground transition"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Bottom hint */}
-        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 text-white/50 text-sm flex items-center gap-2">
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 text-presentation-foreground/50 text-sm flex items-center gap-2">
           <span>Use arrow keys to navigate</span>
           <span className="mx-1">|</span>
           <span>Press ESC to exit</span>
@@ -331,9 +331,13 @@ function PreviewGenerated({ data }) {
     if (!doc) return undefined;
 
     const hoverStyle = doc.createElement('style');
+    doc.documentElement.style.setProperty(
+      '--brand-green',
+      getComputedStyle(document.documentElement).getPropertyValue('--brand-green').trim()
+    );
     hoverStyle.textContent = `
       body { cursor: crosshair !important; }
-      img[data-ai-reference-hover] { outline: 3px solid #6366f1 !important; outline-offset: 2px; cursor: crosshair !important; }
+      img[data-ai-reference-hover] { outline: 3px solid var(--brand-green) !important; outline-offset: 2px; cursor: crosshair !important; }
     `;
     doc.head.appendChild(hoverStyle);
     let hoveredImage = null;

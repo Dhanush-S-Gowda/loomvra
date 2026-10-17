@@ -82,9 +82,9 @@ function NewProject() {
     <form onSubmit={handleSubmit} className="relative h-full min-h-0 w-full overflow-x-hidden overflow-y-auto overscroll-contain">
       {/* Base background — same brand language as the home page */}
       <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
-        <div className="absolute -left-24 -top-28 size-96 rounded-full bg-[radial-gradient(circle,var(--blob-coral),transparent_68%)] opacity-30 blur-3xl dark:opacity-20" />
-        <div className="absolute right-[-9rem] top-28 size-[32rem] rounded-full bg-[radial-gradient(circle,var(--blob-purple),transparent_68%)] opacity-25 blur-3xl dark:opacity-15" />
-        <div className="absolute bottom-[-15rem] left-1/3 size-[34rem] rounded-full bg-[radial-gradient(circle,var(--blob-teal),transparent_68%)] opacity-20 blur-3xl dark:opacity-12" />
+        <div className="absolute -left-24 -top-28 size-96 rounded-full bg-[radial-gradient(circle,var(--blob-green),transparent_68%)] opacity-25 blur-3xl dark:opacity-20" />
+        <div className="absolute right-[-9rem] top-28 size-[32rem] rounded-full bg-[radial-gradient(circle,var(--blob-slate),transparent_68%)] opacity-20 blur-3xl dark:opacity-15" />
+        <div className="absolute bottom-[-15rem] left-1/3 size-[34rem] rounded-full bg-[radial-gradient(circle,var(--blob-green),transparent_68%)] opacity-15 blur-3xl dark:opacity-10" />
         <div className="bg-noise absolute inset-0 opacity-[0.035]" />
       </div>
 
@@ -155,7 +155,11 @@ function NewProject() {
                           {!brandPalette[key] && <Palette className="relative z-10 size-4 text-muted-foreground" />}
                           <input
                             type="color"
-                            value={/^#[\da-f]{6}$/i.test(brandPalette[key]) ? brandPalette[key] : '#ffffff'}
+                            value={
+                              /^#[\da-f]{6}$/i.test(brandPalette[key])
+                                ? brandPalette[key]
+                                : getComputedStyle(document.documentElement).getPropertyValue('--brand-white').trim()
+                            }
                             onChange={(e) => setBrandPalette((prev) => ({ ...prev, [key]: e.target.value }))}
                             disabled={submitting}
                             aria-label={`Pick ${label.toLowerCase()} color`}

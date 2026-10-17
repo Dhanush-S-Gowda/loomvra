@@ -78,7 +78,7 @@ function formatTokenCount(value) {
 function ChatMessage({ message }) {
   const isUser = message.role === 'user';
   if (message.kind === 'reasoning') {
-    return <MessageScrollerItem><div className="ml-2 border-l-2 border-amber-500/40 pl-3 text-xs italic text-muted-foreground whitespace-pre-wrap">{message.content}</div></MessageScrollerItem>;
+    return <MessageScrollerItem><div className="ml-2 border-l-2 border-border pl-3 text-xs italic text-muted-foreground whitespace-pre-wrap">{message.content}</div></MessageScrollerItem>;
   }
   if (message.kind === 'tool') {
     return <MessageScrollerItem><details className="ml-2 rounded-lg border border-dashed bg-muted/30 px-3 py-2 text-xs"><summary className="flex cursor-pointer list-none items-center gap-2 text-muted-foreground"><GridPulse size="tiny" decorative className="shrink-0" />{message.content}</summary><pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap border-t pt-2 font-mono text-[10px] text-foreground/70">{message.details || 'No details returned.'}</pre></details></MessageScrollerItem>;
@@ -400,7 +400,7 @@ export function AIChatPanel({
           </div>
         </div>
       ) : (
-      <Card className="relative flex h-full shrink-0 flex-col gap-0 overflow-hidden rounded-none border shadow-xl" style={{ width: panelWidth }}>
+      <Card className="relative flex h-full shrink-0 flex-col gap-0 overflow-hidden rounded-none border shadow-xl" style={{ width: panelWidth, backgroundColor: 'var(--chat-panel)' }}>
         <button type="button" aria-label="Resize AI Assistant" onMouseDown={startResize} className="absolute inset-y-0 left-0 z-20 flex w-2 cursor-ew-resize items-center justify-center bg-transparent hover:bg-primary/10"><GripVertical className="h-8 w-3 text-muted-foreground/40" /></button>
         {/* Header */}
         <CardHeader className="shrink-0 gap-0 border-b px-4 py-3">
@@ -514,7 +514,7 @@ export function AIChatPanel({
         </CardContent>
 
         {/* Footer */}
-        <CardFooter className="shrink-0 flex-col gap-2 border-t bg-muted/30 p-3">
+        <CardFooter className="shrink-0 flex-col gap-2 border-t bg-[var(--chat-surface)] p-3">
           <Tooltip>
             <TooltipTrigger className="block w-full cursor-help bg-transparent p-0 text-left">
               <div className="w-full">
@@ -681,7 +681,7 @@ export function AIChatPanel({
 
                   {/* Send button */}
                   {isBusy ? (
-                    <InputGroupButton type="button" variant="destructive" size="icon-sm" onClick={handleStop} className="ml-auto shrink-0" aria-label="Stop generation">
+                    <InputGroupButton type="button" variant="default" size="icon-sm" onClick={handleStop} className="ml-auto shrink-0" aria-label="Stop generation">
                       <Square className="h-3.5 w-3.5 fill-current" />
                       <span className="sr-only">Stop</span>
                     </InputGroupButton>

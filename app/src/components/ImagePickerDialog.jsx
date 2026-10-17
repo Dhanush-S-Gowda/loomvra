@@ -278,7 +278,7 @@ export default function ImagePickerDialog({ open, onOpenChange, onSelect }) {
                     />
                     <button
                       onClick={() => setUploadPreview(null)}
-                      className="absolute top-2 right-2 flex items-center justify-center size-7 rounded-full bg-black/60 text-white hover:bg-black/80 transition-colors"
+                      className="absolute top-2 right-2 flex items-center justify-center size-7 rounded-full bg-background/80 text-foreground hover:bg-background transition-colors"
                     >
                       <X className="size-4" />
                     </button>
@@ -414,9 +414,9 @@ export default function ImagePickerDialog({ open, onOpenChange, onSelect }) {
                               className="h-full w-full object-cover transition-transform group-hover:scale-105"
                               loading="lazy"
                             />
-                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors" />
-                            <div className="absolute bottom-0 left-0 right-0 translate-y-full group-hover:translate-y-0 transition-transform bg-black/60 px-2 py-1">
-                              <p className="text-[10px] text-white truncate">
+                            <div className="absolute inset-0 bg-overlay/0 group-hover:bg-overlay/20 transition-colors" />
+                            <div className="absolute bottom-0 left-0 right-0 translate-y-full group-hover:translate-y-0 transition-transform bg-overlay px-2 py-1">
+                              <p className="text-[10px] text-overlay-foreground truncate">
                                 {photo.photographer}
                               </p>
                             </div>

@@ -354,7 +354,7 @@ function DesignPlan({ data, projectId }) {
                 <X className="size-4" />
               </Button>
               <Button variant="ghost" size="icon-sm" onClick={saveEdit}>
-                <Check className="size-4 text-green-600" />
+                <Check className="size-4 text-success" />
               </Button>
             </div>
           ) : (
@@ -466,7 +466,7 @@ function DesignPlan({ data, projectId }) {
                 <X className="size-4" />
               </Button>
               <Button variant="ghost" size="icon-sm" onClick={saveEdit}>
-                <Check className="size-4 text-green-600" />
+                <Check className="size-4 text-success" />
               </Button>
             </div>
           ) : (
@@ -666,7 +666,7 @@ function DesignPlan({ data, projectId }) {
                 <X className="size-4" />
               </Button>
               <Button variant="ghost" size="icon-sm" onClick={saveEdit}>
-                <Check className="size-4 text-green-600" />
+                <Check className="size-4 text-success" />
               </Button>
             </div>
           ) : (
@@ -802,7 +802,7 @@ function DesignPlan({ data, projectId }) {
                           <X className="size-4" />
                         </Button>
                         <Button variant="ghost" size="icon-sm" onClick={saveEdit}>
-                          <Check className="size-4 text-green-600" />
+                          <Check className="size-4 text-success" />
                         </Button>
                       </>
                     ) : (
@@ -975,7 +975,7 @@ function DesignPlan({ data, projectId }) {
                                     className="h-24 w-32 object-cover rounded-lg"
                                     loading="lazy"
                                   />
-                                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors rounded-lg" />
+                                  <div className="absolute inset-0 bg-overlay/0 group-hover:bg-overlay/10 transition-colors rounded-lg" />
                                 </button>
                               </DialogTrigger>
                               <DialogContent className="max-w-[90vw] sm:max-w-[90vw]">

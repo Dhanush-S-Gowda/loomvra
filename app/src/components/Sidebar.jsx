@@ -20,6 +20,15 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Separator } from '@/components/ui/separator';
 import {
   Plus,
@@ -34,14 +43,18 @@ import {
 } from 'lucide-react';
 import { GridPulse } from '@/components/GridLoadingScreen';
 import { useTheme } from '@/components/ThemeProvider';
-import { getAllProjects, deleteProject } from '@/lib/api';
+import { getAllProjects, deleteProject, renameProject } from '@/lib/api';
 import { toast } from "sonner";
+import BrandLogo from '@/components/BrandLogo';
 
 function Sidebar() {
   const location = useLocation();
   const { theme, toggleTheme } = useTheme();
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [projectToRename, setProjectToRename] = useState(null);
+  const [projectName, setProjectName] = useState('');
+  const [renaming, setRenaming] = useState(false);
 
   const fetchProjects = () => {
     getAllProjects(1, 50)
@@ -72,13 +85,42 @@ function Sidebar() {
     }
   };
 
+  const openRenameDialog = (project) => {
+    setProjectToRename(project);
+    setProjectName(project.name || project.title || '');
+  };
+
+  const handleRename = async (event) => {
+    event.preventDefault();
+    const nextName = projectName.trim();
+    if (!nextName || !projectToRename) return;
+    setRenaming(true);
+    try {
+      const updated = await renameProject(
+        projectToRename.id || projectToRename.projectId,
+        nextName
+      );
+      setProjects((current) => current.map((project) =>
+        (project.id || project.projectId) === (projectToRename.id || projectToRename.projectId)
+          ? { ...project, name: updated.name }
+          : project
+      ));
+      toast.success('Project renamed');
+      setProjectToRename(null);
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setRenaming(false);
+    }
+  };
+
   return (
     <ShadcnSidebar collapsible="icon">
       <SidebarHeader className="gap-2 p-2">
         <div className="flex items-center gap-2 px-2 justify-between">
-          <span className="truncate text-sm font-semibold tracking-tight group-data-[collapsible=icon]:hidden">
-            NextGen PPT
-          </span>
+          <Link to="/" aria-label="loomvra home" className="min-w-0">
+            <BrandLogo compact />
+          </Link>
           <SidebarTrigger asChild>
             <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0">
               <PanelLeft className="size-4" />
@@ -139,7 +181,7 @@ function Sidebar() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" side="bottom">
-                              <DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => openRenameDialog(project)}>
                                 <Pencil className="size-4 mr-2" />
                                 <span>Rename</span>
                               </DropdownMenuItem>
@@ -162,6 +204,36 @@ function Sidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
+
+      <Dialog open={Boolean(projectToRename)} onOpenChange={(open) => {
+        if (!open && !renaming) setProjectToRename(null);
+      }}>
+        <DialogContent>
+          <form onSubmit={handleRename}>
+            <DialogHeader>
+              <DialogTitle>Rename project</DialogTitle>
+              <DialogDescription>Choose a name for this project.</DialogDescription>
+            </DialogHeader>
+            <div className="py-4">
+              <Input
+                autoFocus
+                aria-label="Project name"
+                value={projectName}
+                onChange={(event) => setProjectName(event.target.value)}
+                required
+              />
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" disabled={renaming} onClick={() => setProjectToRename(null)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={renaming || !projectName.trim()}>
+                {renaming ? 'Saving…' : 'Save name'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       <SidebarFooter className="gap-2 p-3">
         <Separator className="bg-sidebar-border" />
