@@ -149,6 +149,7 @@ app.db
 *.jpg
 *.jpeg
 *.png
+!artifacts/Loomvra.png
 *.svg
 *.pdf
 *.pptx
