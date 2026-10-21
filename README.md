@@ -6,9 +6,7 @@ Loomvra turns a presentation brief into editable slides. It creates a design pla
 
 ## Product demo
 
-[![Watch the Loomvra product demo](https://raw.githubusercontent.com/Dhanush-S-Gowda/DOM2PPT/main/artifacts/Loomvra.png)](https://raw.githubusercontent.com/Dhanush-S-Gowda/DOM2PPT/main/artifacts/loomvra-product-demo-4k.mp4)
-
-[Open or download the demo video](https://raw.githubusercontent.com/Dhanush-S-Gowda/DOM2PPT/main/artifacts/loomvra-product-demo-4k.mp4).
+https://github.com/user-attachments/assets/adcd206a-02e0-45ea-82cd-5973b5f93768
 
 ## What it does
 
