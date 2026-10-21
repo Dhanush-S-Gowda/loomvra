@@ -97,7 +97,7 @@ function NewProject() {
         <h1 className="font-heading text-5xl leading-[0.95] tracking-tight sm:text-6xl">
           Describe what you want to <span className="text-primary">say.</span>
         </h1>
-        <p className="mt-5 max-w-md text-base leading-7 text-muted-foreground">
+        <p className="mt-5 text-base leading-7 text-muted-foreground">
           Give it a name and a short brief. We'll turn the direction into a story, then a deck you can edit.
         </p>
 

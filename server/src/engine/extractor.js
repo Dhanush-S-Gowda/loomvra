@@ -93,6 +93,18 @@ export default () => {
         };
     }
 
+    function textNodeBounds(node, fallbackRect) {
+        const range = document.createRange();
+        range.selectNodeContents(node);
+        const rects = [...range.getClientRects()].filter((rect) => rect.width || rect.height);
+        if (!rects.length) return fallbackRect;
+        const left = Math.min(...rects.map((rect) => rect.left));
+        const top = Math.min(...rects.map((rect) => rect.top));
+        const right = Math.max(...rects.map((rect) => rect.right));
+        const bottom = Math.max(...rects.map((rect) => rect.bottom));
+        return { x: left, y: top, width: right - left, height: bottom - top };
+    }
+
     function glyphImage(text, style, rect, slideRect) {
         if (!rect.width || !rect.height) return null;
         const scale = 3;
@@ -173,42 +185,59 @@ export default () => {
     }
 
     function backgroundImageElement(style, rect, slideRect, zIndex) {
-        if (!style.backgroundImage || style.backgroundImage === "none") return null;
-        const data = gradientDataUrl(style.backgroundImage, rect.width, rect.height);
-        const url = style.backgroundImage.match(/url\(["']?(.*?)["']?\)/i)?.[1];
-        const src = data || url;
-        if (!src) return null;
-        const size = String(style.backgroundSize || "").split(",")[0].trim();
-        const objectFit = size === "cover" ? "cover" : size === "contain" ? "contain" : "fill";
-        return {
-            kind: "image",
-            src,
-            alt: "CSS background image",
-            frame: { x: rect.x - slideRect.x, y: rect.y - slideRect.y, width: rect.width, height: rect.height },
-            style: {
-                objectFit,
-                objectPosition: style.backgroundPosition,
-                borderRadius: borderRadii(style),
-                opacity: parseFloat(style.opacity) || 1,
-                zIndex,
-                borderTopWidth: px(style.borderTopWidth),
-                borderRightWidth: px(style.borderRightWidth),
-                borderBottomWidth: px(style.borderBottomWidth),
-                borderLeftWidth: px(style.borderLeftWidth),
-                borderTopColor: rgbaToHex(style.borderTopColor),
-                borderTopAlpha: rgbaToAlpha(style.borderTopColor),
-                borderRightColor: rgbaToHex(style.borderRightColor),
-                borderRightAlpha: rgbaToAlpha(style.borderRightColor),
-                borderBottomColor: rgbaToHex(style.borderBottomColor),
-                borderBottomAlpha: rgbaToAlpha(style.borderBottomColor),
-                borderLeftColor: rgbaToHex(style.borderLeftColor),
-                borderLeftAlpha: rgbaToAlpha(style.borderLeftColor),
-                borderTopStyle: style.borderTopStyle,
-                borderRightStyle: style.borderRightStyle,
-                borderBottomStyle: style.borderBottomStyle,
-                borderLeftStyle: style.borderLeftStyle,
-            },
-        };
+        if (!style.backgroundImage || style.backgroundImage === "none") return [];
+        const layers = splitCssArguments(style.backgroundImage);
+        const sizes = splitCssArguments(style.backgroundSize || "auto");
+        const positions = splitCssArguments(style.backgroundPosition || "0% 0%");
+        const repeats = splitCssArguments(style.backgroundRepeat || "repeat");
+        return layers.map((layer, index) => {
+            const data = gradientDataUrl(layer, rect.width, rect.height);
+            const url = layer.match(/url\(["']?(.*?)["']?\)/i)?.[1];
+            const src = data || url;
+            if (!src) return null;
+            const size = sizes[index % sizes.length].trim();
+            const objectFit = size === "cover"
+                ? "cover"
+                : size === "contain" || size === "auto"
+                    ? "contain"
+                    : "fill";
+            return {
+                kind: "image",
+                src,
+                alt: "CSS background image",
+                frame: {
+                    x: rect.x - slideRect.x,
+                    y: rect.y - slideRect.y,
+                    width: rect.width,
+                    height: rect.height,
+                },
+                style: {
+                    objectFit,
+                    objectPosition: positions[index % positions.length],
+                    backgroundRepeat: repeats[index % repeats.length],
+                    backgroundLayer: layers.length - index,
+                    borderRadius: borderRadii(style),
+                    opacity: parseFloat(style.opacity) || 1,
+                    zIndex,
+                    borderTopWidth: px(style.borderTopWidth),
+                    borderRightWidth: px(style.borderRightWidth),
+                    borderBottomWidth: px(style.borderBottomWidth),
+                    borderLeftWidth: px(style.borderLeftWidth),
+                    borderTopColor: rgbaToHex(style.borderTopColor),
+                    borderTopAlpha: rgbaToAlpha(style.borderTopColor),
+                    borderRightColor: rgbaToHex(style.borderRightColor),
+                    borderRightAlpha: rgbaToAlpha(style.borderRightColor),
+                    borderBottomColor: rgbaToHex(style.borderBottomColor),
+                    borderBottomAlpha: rgbaToAlpha(style.borderBottomColor),
+                    borderLeftColor: rgbaToHex(style.borderLeftColor),
+                    borderLeftAlpha: rgbaToAlpha(style.borderLeftColor),
+                    borderTopStyle: style.borderTopStyle,
+                    borderRightStyle: style.borderRightStyle,
+                    borderBottomStyle: style.borderBottomStyle,
+                    borderLeftStyle: style.borderLeftStyle,
+                },
+            };
+        }).filter(Boolean).reverse();
     }
 
     function textRunWithEmojiImages(node, owner, slideRect) {
@@ -353,6 +382,11 @@ export default () => {
         ],
     };
 
+    // The root canvas background is painted behind all child elements and
+    // must be emitted explicitly because querySelectorAll excludes the root.
+    const rootBackground = backgroundImageElement(slideStyle, slideRect, slideRect, Number.MIN_SAFE_INTEGER);
+    scene.slides[0].elements.push(...rootBackground);
+
     const elements = Array.from(slide.querySelectorAll("*"));
 
     // =====================================
@@ -494,23 +528,10 @@ export default () => {
 
         const childrenContainText = Array.from(el.children).some((child) => {
             const childText = child.innerText && child.innerText.trim();
-
             return !!childText;
         });
 
-        /*
-                    IMPORTANT:
-
-                    Extract text only if:
-                    - element has direct text
-                    - children do NOT contain text
-
-                    This prevents:
-                    - duplicated parent text
-                    - giant merged text blobs
-                    */
-
-        if (hasDirectText && !childrenContainText) {
+        if (hasDirectText) {
             let frameRect = rect;
             let containerDisplay = null;
             let containerJustifyContent = null;
@@ -647,8 +668,59 @@ export default () => {
             }
 
             const textBackground = backgroundImageElement(style, frameRect, slideRect, getZIndex(style));
-            if (textBackground) scene.slides[0].elements.push(textBackground);
-            scene.slides[0].elements.push(textObj);
+            if (childrenContainText) {
+                // Mixed content (for example, text with inline <strong>/<em>
+                // nodes) has direct text between child elements. Export each
+                // direct text node at its Chromium-measured bounds so no words
+                // disappear and inline children keep their own styles.
+                const parentHasVisualStyle = hasVisualBackground(style) ||
+                    textObj.style.backgroundImage ||
+                    textObj.style.borderTopWidth || textObj.style.borderRightWidth ||
+                    textObj.style.borderBottomWidth || textObj.style.borderLeftWidth ||
+                    textObj.style.boxShadow;
+                if (parentHasVisualStyle) {
+                    scene.slides[0].elements.push({
+                        kind: "shape",
+                        frame: { x, y, width: rect.width, height: rect.height },
+                        style: textObj.style,
+                    });
+                }
+                scene.slides[0].elements.push(...textBackground);
+                ownTextNodes.forEach((node, index) => {
+                    const bounds = textNodeBounds(node, rect);
+                    const run = extractedRuns[index];
+                    const nodeStyle = {
+                        ...textObj.style,
+                        background: null,
+                        backgroundImage: null,
+                        borderTopWidth: 0,
+                        borderRightWidth: 0,
+                        borderBottomWidth: 0,
+                        borderLeftWidth: 0,
+                        boxShadow: null,
+                        paddingTop: 0,
+                        paddingRight: 0,
+                        paddingBottom: 0,
+                        paddingLeft: 0,
+                        textAlign: "left",
+                    };
+                    scene.slides[0].elements.push({
+                        ...textObj,
+                        text: run.text,
+                        runs: [run],
+                        frame: {
+                            x: bounds.x - slideRect.x,
+                            y: bounds.y - slideRect.y,
+                            width: bounds.width,
+                            height: bounds.height,
+                        },
+                        style: nodeStyle,
+                    });
+                });
+            } else {
+                scene.slides[0].elements.push(...textBackground);
+                scene.slides[0].elements.push(textObj);
+            }
 
             return;
         }
@@ -733,7 +805,7 @@ export default () => {
                     zIndex: getZIndex(style),                },
             });
             const backgroundImage = backgroundImageElement(style, rect, slideRect, getZIndex(style));
-            if (backgroundImage) scene.slides[0].elements.push(backgroundImage);
+            scene.slides[0].elements.push(...backgroundImage);
         }
     });
 

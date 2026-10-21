@@ -3,12 +3,11 @@ import path from "path";
 import { chromium } from "playwright";
 import { getProject, getSlidesByProject } from "../storage/db.js";
 import { processSlide, renderSlide } from "../pipeline/index.js";
+import { SLIDE_HEIGHT, SLIDE_WIDTH } from "../pipeline/slideRenderer.js";
 import StorageMng from "./StorageMng.js";
 import extractor from "../engine/extractor.js";
 import { generatePresentation } from "../engine/ppt.js";
 
-const WIDTH = 1280;
-const HEIGHT = 720;
 const DATA_URL = /^data:([^;,]+)(?:;[^,]*)?,([\s\S]+)$/i;
 
 function extension(url) {
@@ -72,7 +71,7 @@ export async function exportPdf(projectId) {
   const slides = await buildSlides(projectId);
   const browser = await chromium.launch({ headless: true });
   try {
-    const page = await browser.newPage({ viewport: { width: WIDTH, height: HEIGHT } });
+    const page = await browser.newPage({ viewport: { width: SLIDE_WIDTH, height: SLIDE_HEIGHT } });
     const bodies = slides.map(({ document }) => document.match(/<body[^>]*>([\s\S]*?)<\/body>/i)?.[1] || "").join('<div class="export-break"></div>');
     const styles = slides.map(({ document }) => (document.match(/<style[^>]*>([\s\S]*?)<\/style>/gi) || [])
       .map((tag) => tag.replace(/^<style[^>]*>|<\/style>$/gi, ""))
@@ -92,7 +91,7 @@ export async function exportPptx(projectId) {
   try {
     const scene = { slides: [] };
     for (const { document, number } of slides) {
-      const page = await browser.newPage({ viewport: { width: WIDTH, height: HEIGHT } });
+      const page = await browser.newPage({ viewport: { width: SLIDE_WIDTH, height: SLIDE_HEIGHT } });
       await page.setContent(document, { waitUntil: "load" });
       await page.evaluate(() => document.fonts?.ready);
       scene.slides.push({ ...(await page.evaluate(extractor)).slides[0], number });

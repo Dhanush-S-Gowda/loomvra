@@ -7,7 +7,6 @@ import {
     updateProject,
     createSlide,
     updateSlide,
-    transitionStage,
     updateProgress,
 } from "../storage/db.js";
 import SlideSchema from "../schemas/slide.schema.js";
@@ -150,7 +149,6 @@ export async function generateSlides(data) {
         const errMsg =
             "Design plan is missing or empty. Cannot generate slides.";
         console.error(`[SlidesJob] ${errMsg}`);
-        transitionStage(projectId, "slides", "failed", errMsg);
         throw new Error(errMsg);
     }
 
@@ -162,7 +160,6 @@ export async function generateSlides(data) {
     if (!apiKey) {
         const errMsg = "OpenRouter API key is not configured in settings.";
         console.error(`[SlidesJob] ${errMsg}`);
-        transitionStage(projectId, "slides", "failed", errMsg);
         throw new Error(errMsg);
     }
 
@@ -170,7 +167,6 @@ export async function generateSlides(data) {
     if (!resolvedModel) {
         const errMsg = "Main model is not configured in settings.";
         console.error(`[SlidesJob] ${errMsg}`);
-        transitionStage(projectId, "slides", "failed", errMsg);
         throw new Error(errMsg);
     }
 
@@ -231,7 +227,6 @@ export async function generateSlides(data) {
     } catch (err) {
         const errMsg = `Master template generation failed: ${err.message}`;
         console.error(`[SlidesJob] ${errMsg}`);
-        transitionStage(projectId, "slides", "failed", errMsg);
         throw new Error(errMsg);
     }
 
@@ -290,7 +285,6 @@ export async function generateSlides(data) {
         } catch (err) {
             const errMsg = `Slide ${seqNum} generation failed: ${err.message}`;
             console.error(`[SlidesJob] ${errMsg}`);
-            transitionStage(projectId, "slides", "failed", errMsg);
             throw new Error(errMsg);
         }
     }

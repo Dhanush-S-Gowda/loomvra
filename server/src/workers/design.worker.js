@@ -7,12 +7,7 @@ const worker = new Worker(
   "design-plan",
   async (job) => {
     console.log(`[DesignWorker] Processing job ${job.id} for project ${job.data.projectId}`);
-    try {
-      await generateDesignPlan(job.data);
-    } catch (err) {
-      console.error(`[DesignWorker] Job ${job?.id} failed:`, err?.message || err);
-      transitionStage(job.data.projectId, "design", "failed", err?.message || err);
-    }
+    await generateDesignPlan(job.data);
   },
   {
     connection,
@@ -26,6 +21,9 @@ worker.on("completed", (job) => {
 
 worker.on("failed", (job, err) => {
   console.error(`[DesignWorker] Job ${job?.id} failed:`, err?.message || err);
+  if (job && job.attemptsMade >= (job.opts.attempts ?? 1)) {
+    transitionStage(job.data.projectId, "design", "failed", err?.message || String(err));
+  }
 });
 
 worker.on("error", (err) => {

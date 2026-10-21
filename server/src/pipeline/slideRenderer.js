@@ -8,8 +8,8 @@
  * added only at render/serve time.
  */
 
-const SLIDE_WIDTH = 1280;
-const SLIDE_HEIGHT = 720;
+export const SLIDE_WIDTH = 1280;
+export const SLIDE_HEIGHT = 720;
 
 /**
  * Render a `{ css, html }` slide into a full HTML document.

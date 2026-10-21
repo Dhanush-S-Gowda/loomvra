@@ -3,7 +3,6 @@ import { searchImage } from "../services/pexels.js";
 import {
   getSettings,
   updateProject,
-  transitionStage,
   updateProgress
 } from "../storage/db.js";
 import fs from "fs";
@@ -24,13 +23,11 @@ export async function generateDesignPlan(data) {
   if (!apiKey) {
       const errMsg = "OpenRouter API key is not configured in settings.";
       console.error(`[DesignJob] ${errMsg}`);
-      transitionStage(projectId, "design", "failed", errMsg);
       throw new Error(errMsg);
   }
   if (!pexelApiKey) {
       const errMsg = "Pexels API key is not configured in settings.";
       console.error(`[DesignJob] ${errMsg}`);
-      transitionStage(projectId, "design", "failed", errMsg);
       throw new Error(errMsg);
   }
 
@@ -74,7 +71,6 @@ export async function generateDesignPlan(data) {
   } catch (err) {
       const errMsg = `OpenRouter API error: ${err.message}`;
       console.error(`[DesignJob] ${errMsg}`);
-      transitionStage(projectId, "design", "failed", errMsg);
       throw err;
   }
 
@@ -82,7 +78,6 @@ export async function generateDesignPlan(data) {
   if (!plan) {
       const errMsg = "No content returned from OpenRouter.";
       console.error(`[DesignJob] ${errMsg}`);
-      transitionStage(projectId, "design", "failed", errMsg);
       throw new Error(errMsg);
   }
 
@@ -92,7 +87,6 @@ export async function generateDesignPlan(data) {
   } catch {
       const errMsg = "Failed to parse OpenRouter response as JSON.";
       console.error(`[DesignJob] ${errMsg}`);
-      transitionStage(projectId, "design", "failed", errMsg);
       throw new Error(errMsg);
   }
 
@@ -100,7 +94,6 @@ export async function generateDesignPlan(data) {
   if (!parsed.success) {
       const errMsg = `Design plan failed validation: ${parsed.error.message}`;
       console.error(`[DesignJob] ${errMsg}`);
-      transitionStage(projectId, "design", "failed", errMsg);
       throw new Error(errMsg);
   }
   designPlan = parsed.data;

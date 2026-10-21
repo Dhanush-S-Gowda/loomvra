@@ -1,7 +1,6 @@
 import pptxgen from "pptxgenjs";
 import fs from "fs/promises";
 
-const SCENE_GRAPH_FILE = "scene_graph.json";
 const OUTPUT_FILE = "presentation.pptx";
 
 // CSS canvas pixels are defined at 96 dpi. Derive the physical slide size from
@@ -219,8 +218,7 @@ function roundedImageSvg(dataUrl, frame, radius, objectFit) {
 
 export async function generatePresentation(scene, outputFile = null) {
     if (!scene) {
-        const raw = await fs.readFile(SCENE_GRAPH_FILE, "utf8");
-        scene = JSON.parse(raw);
+        throw new Error("A scene graph is required to generate a presentation.");
     }
 
     const pres = new pptxgen();
@@ -281,7 +279,7 @@ export async function generatePresentation(scene, outputFile = null) {
                     const opts = { ...basePos };
 
                     // Fill
-                    if (style.background && !style.backgroundImage) {
+                    if (style.background) {
                         opts.fill = {
                             color: normalizeColor(style.background),
                             transparency:
@@ -390,7 +388,7 @@ export async function generatePresentation(scene, outputFile = null) {
                     }
 
                     // Background fill for text box
-                    if (style.background && !style.backgroundImage) {
+                    if (style.background) {
                         opts.fill = {
                             color: normalizeColor(style.background),
                             transparency:

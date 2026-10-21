@@ -7,13 +7,7 @@ const worker = new Worker(
     "slides-generation",
     async (job) => {
         console.log(`[SlidesWorker] Processing job ${job.id} for project ${job.data.projectId}`);
-        try {
-            await generateSlides(job.data);
-        } catch (err) {
-            console.error(`[SlidesWorker] Job ${job?.id} failed:`, err?.message || err);
-            transitionStage(job.data.projectId, "slides", "failed", err?.message || err);
-            throw err;
-        }
+        await generateSlides(job.data);
     },
     {
         connection,
@@ -27,6 +21,9 @@ worker.on("completed", (job) => {
 
 worker.on("failed", (job, err) => {
     console.error(`[SlidesWorker] Job ${job?.id} failed:`, err?.message || err);
+    if (job && job.attemptsMade >= (job.opts.attempts ?? 1)) {
+        transitionStage(job.data.projectId, "slides", "failed", err?.message || String(err));
+    }
 });
 
 worker.on("error", (err) => {
