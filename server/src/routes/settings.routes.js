@@ -26,7 +26,6 @@ router.patch("/settings", (req, res) => {
     }
 });
 
-// Verify an OpenRouter API key by hitting OpenRouter's auth/key endpoint.
 router.post("/settings/verify/openrouter", async (req, res) => {
     try {
         const { apiKey } = req.body;
@@ -49,7 +48,6 @@ router.post("/settings/verify/openrouter", async (req, res) => {
     }
 });
 
-// Verify a Pexels API key by making a minimal search request.
 router.post("/settings/verify/pexels", async (req, res) => {
     try {
         const { apiKey } = req.body;

@@ -195,7 +195,6 @@ export default function ImagePickerDialog({ open, onOpenChange, onSelect }) {
           <DialogTitle>Add Image</DialogTitle>
         </DialogHeader>
 
-        {/* Tabs */}
         <div className="flex border-b px-6">
           <button
             onClick={() => {
@@ -227,7 +226,6 @@ export default function ImagePickerDialog({ open, onOpenChange, onSelect }) {
           </button>
         </div>
 
-        {/* Content */}
         <div
           className="flex-1 overflow-y-auto p-6 min-h-[320px]"
           onScroll={handleResultsScroll}

@@ -6,7 +6,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { downloadProjectExport } from '@/lib/api';
+import { API_BASE_URL, downloadProjectExport } from '@/lib/api';
 import {
   Tooltip,
   TooltipContent,
@@ -30,6 +30,7 @@ import { toast } from 'sonner';
 
 const SLIDE_WIDTH = 1280;
 const SLIDE_HEIGHT = 720;
+const EMPTY_SLIDES = [];
 
 function ScaledSlide({
   html,
@@ -51,7 +52,7 @@ function ScaledSlide({
     doc.open();
     doc.write(html);
     doc.close();
-  }, [html]);
+  }, [html, iframeRef]);
 
   useEffect(() => {
     if (controlledScale !== undefined || !wrapperRef.current) return;
@@ -84,7 +85,7 @@ function ScaledSlide({
           : {}),
       }}
     >
-      {/* Static frame: border stays crisp at 1px and exactly wraps the scaled slide */}
+
       <div className="absolute inset-0 overflow-hidden rounded-[3px] border border-border">
         <iframe
           ref={iframeRef}
@@ -173,7 +174,6 @@ function SlideViewer({ slide, zoom, onZoomIn, onZoomOut, className, style, ifram
         </div>
       </div>
 
-      {/* Zoom controls */}
       <div className="absolute bottom-4 right-4 flex items-center bg-background/90 backdrop-blur border rounded-lg shadow-sm overflow-hidden z-10">
         <button
           onClick={onZoomOut}
@@ -255,7 +255,7 @@ function PresentationMode({ slides, startIndex, onClose }) {
       className="fixed inset-0 z-50 bg-presentation text-presentation-foreground flex flex-col items-center justify-center"
     >
       <div className="relative w-full h-full flex items-center justify-center">
-        {/* Slide container with aspect ratio preservation */}
+
         <div
           className="relative w-full"
           style={{
@@ -270,7 +270,6 @@ function PresentationMode({ slides, startIndex, onClose }) {
           )}
         </div>
 
-        {/* Navigation overlays */}
         <button
           onClick={goPrev}
           disabled={isFirst}
@@ -286,7 +285,6 @@ function PresentationMode({ slides, startIndex, onClose }) {
           <ChevronRight className="w-8 h-8" />
         </button>
 
-        {/* Top bar */}
         <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-6 py-4 bg-linear-to-b from-overlay/60 to-transparent">
           <span className="text-presentation-foreground/80 text-sm font-medium">
             {currentIndex < slides.length
@@ -301,7 +299,6 @@ function PresentationMode({ slides, startIndex, onClose }) {
           </button>
         </div>
 
-        {/* Bottom hint */}
         <div className="absolute bottom-6 left-1/2 -translate-x-1/2 text-presentation-foreground/50 text-sm flex items-center gap-2">
           <span>Use arrow keys to navigate</span>
           <span className="mx-1">|</span>
@@ -312,18 +309,19 @@ function PresentationMode({ slides, startIndex, onClose }) {
   );
 }
 
-function PreviewGenerated({ data }) {
+function PreviewGenerated({ data, projectId }) {
   const [activeIndex, setActiveIndex] = useState(0);
   const [presenting, setPresenting] = useState(false);
   const [zoom, setZoom] = useState(1);
   const [editedState, setEditedState] = useState(null);
   const [exporting, setExporting] = useState(null);
-  const slides = editedState?.source === data ? editedState.slides : data?.slides || [];
+  const slides = editedState?.source === data ? editedState.slides : data?.slides || EMPTY_SLIDES;
   const projectTitle = data?.name || data?.project?.title || data?.projectId || 'Untitled Project';
   const activeThumbRef = useRef(null);
   const activeSlideFrameRef = useRef(null);
   const [isSelectingSlideImage, setIsSelectingSlideImage] = useState(false);
   const [selectedSlideImage, setSelectedSlideImage] = useState(null);
+  const activeSlideContent = slides[activeIndex]?.content;
 
   useEffect(() => {
     if (!isSelectingSlideImage) return undefined;
@@ -372,35 +370,22 @@ function PreviewGenerated({ data }) {
       clearHighlight();
       hoverStyle.remove();
     };
-  }, [isSelectingSlideImage, activeIndex, slides[activeIndex]?.content]);
+  }, [isSelectingSlideImage, activeIndex, activeSlideContent]);
 
   const captureCurrentSlide = useCallback(async () => {
-    const doc = activeSlideFrameRef.current?.contentDocument;
-    if (!doc?.documentElement) throw new Error('The current slide is not ready to capture.');
-    const serializer = new XMLSerializer();
-    const styles = [...doc.querySelectorAll('style')]
-      .map((style) => serializer.serializeToString(style))
-      .join('');
-    const body = doc.body ? serializer.serializeToString(doc.body) : '';
-    const markup = `${styles}${body}`;
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${SLIDE_WIDTH}" height="${SLIDE_HEIGHT}"><foreignObject width="100%" height="100%"><div xmlns="http://www.w3.org/1999/xhtml" style="width:${SLIDE_WIDTH}px;height:${SLIDE_HEIGHT}px;overflow:hidden">${markup}</div></foreignObject></svg>`;
-    const svgUrl = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml;charset=utf-8' }));
-    try {
-      const image = new Image();
-      image.src = svgUrl;
-      await new Promise((resolve, reject) => {
-        image.onload = resolve;
-        image.onerror = () => reject(new Error('The current slide could not be rendered as an image.'));
-      });
-      const canvas = document.createElement('canvas');
-      canvas.width = SLIDE_WIDTH;
-      canvas.height = SLIDE_HEIGHT;
-      canvas.getContext('2d').drawImage(image, 0, 0, SLIDE_WIDTH, SLIDE_HEIGHT);
-      return canvas.toDataURL('image/png');
-    } finally {
-      URL.revokeObjectURL(svgUrl);
-    }
-  }, []);
+    const currentSlide = slides[activeIndex];
+    const id = projectId ?? data?.projectId;
+    if (!id || !currentSlide) throw new Error('The current slide is not ready to capture.');
+
+    const response = await fetch(`${API_BASE_URL}/project/${id}/slide-image`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ slideNumber: currentSlide.index }),
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'The current slide could not be rendered as an image.');
+    return result.url;
+  }, [activeIndex, data?.projectId, projectId, slides]);
 
   const activeSlide = slides[activeIndex];
 
@@ -415,13 +400,9 @@ function PreviewGenerated({ data }) {
       return { source: data, slides: next };
     });
   }, [data]);
-
-  // Keep active thumbnail visible
   useEffect(() => {
     activeThumbRef.current?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
   }, [activeIndex]);
-
-  // Arrow key navigation outside presentation mode
   useEffect(() => {
     function handleKeyDown(e) {
       if (presenting) return;
@@ -456,7 +437,7 @@ function PreviewGenerated({ data }) {
       <div
         className="grid h-full bg-background grid-rows-[auto_1fr_auto] grid-cols-[1fr_auto]"
       >
-        {/* Top bar */}
+
         <div className="col-span-full flex items-center justify-between px-6 py-3 border-b bg-background/95 backdrop-blur">
           <div className="flex items-center gap-3">
             <Monitor className="w-5 h-5 text-muted-foreground" />
@@ -491,7 +472,6 @@ function PreviewGenerated({ data }) {
           </div>
         </div>
 
-        {/* Main slide viewer */}
         <SlideViewer
           slide={activeSlide}
           zoom={zoom}
@@ -501,10 +481,9 @@ function PreviewGenerated({ data }) {
           style={{ background: 'var(--preview-bg)' }}
         />
 
-        {/* AI Chat Panel — right sidebar (fixed narrow width, collapses to a slim rail) */}
         <div className="col-start-2 row-span-2 w-fit overflow-hidden border-l bg-background flex flex-col">
           <AIChatPanel
-            projectId={data?.projectId}
+            projectId={projectId ?? data?.projectId}
             slideCount={slides.length}
             onSlidesUpdated={handleSlidesUpdated}
             onCaptureCurrentSlide={captureCurrentSlide}
@@ -514,7 +493,6 @@ function PreviewGenerated({ data }) {
           />
         </div>
 
-        {/* Bottom thumbnail panel */}
         <div
           className="flex items-center gap-4 px-4 py-2 border-t overflow-hidden"
           style={{ background: 'var(--preview-thumb-bg)' }}
@@ -539,7 +517,6 @@ function PreviewGenerated({ data }) {
           </div>
         </div>
 
-        {/* Presentation mode */}
         {presenting && (
           <PresentationMode
             slides={slides}

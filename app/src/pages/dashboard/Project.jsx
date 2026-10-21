@@ -57,14 +57,10 @@ function SlidesProcessingAnimation({ progress = 0, progressMessage, slides = [] 
   const slideMatch = progressMessage?.match(/slide\s+(\d+)\s+of\s+(\d+)/i);
   const currentSlide = slideMatch ? Number(slideMatch[1]) : null;
   const totalSlides = slideMatch ? Number(slideMatch[2]) : null;
-  const activeSlide = slides[activeSlideIndex] ?? slides[0];
+  const currentSlideIndex = slides.length ? activeSlideIndex % slides.length : 0;
+  const activeSlide = slides[currentSlideIndex] ?? slides[0];
 
   useEffect(() => {
-    if (!slides.length) {
-      setActiveSlideIndex(0);
-      return undefined;
-    }
-    setActiveSlideIndex((index) => index % slides.length);
     if (slides.length < 2) return undefined;
     const interval = setInterval(() => {
       setActiveSlideIndex((index) => (index + 1) % slides.length);
@@ -107,8 +103,6 @@ function SlidesProcessingAnimation({ progress = 0, progressMessage, slides = [] 
   );
 }
 
-/* ─── Project page ─── */
-
 function Project() {
   const { pid } = useParams();
   const navigate = useNavigate();
@@ -117,8 +111,6 @@ function Project() {
   const [error, setError] = useState(null);
   const pollingRef = useRef(null);
   const pollImpl = useRef(null);
-
-  // Set up the poll implementation once
   useEffect(() => {
     pollImpl.current = (id, cancelledRef) => {
       fetchProjectAPI(id)
@@ -233,8 +225,6 @@ function Project() {
       </div>
     );
   }
-
-  // ── Design processing ──
   if (data.state === "design_processing" || data.state === "design_pending") {
     return (
       <GridLoadingScreen
@@ -246,8 +236,6 @@ function Project() {
       />
     );
   }
-
-  // ── Design failed ──
   if (data.state === "design_failed") {
     return (
       <div className="flex flex-col items-center justify-center h-full p-10 gap-4">
@@ -268,13 +256,9 @@ function Project() {
       </div>
     );
   }
-
-  // ── Design ready (show design plan) ──
   if (data.state === "design") {
     return <DesignPlan data={data} projectId={pid} />;
   }
-
-  // ── Slides processing ──
   if (data.state === "slides_processing" || data.state === "slides_pending") {
     return (
       <SlidesProcessingAnimation
@@ -284,8 +268,6 @@ function Project() {
       />
     );
   }
-
-  // ── Slides failed ──
   if (data.state === "slides_failed") {
     return (
       <div className="flex flex-col items-center justify-center h-full p-10 gap-4">
@@ -303,13 +285,9 @@ function Project() {
       </div>
     );
   }
-
-  // ── Generated (slides ready) ──
   if (data.state === "generated") {
-    return <PreviewGenerated data={data} />;
+    return <PreviewGenerated data={data} projectId={pid} />;
   }
-
-  // ── Unknown state ──
   return (
     <div className="flex flex-col justify-center h-full">
       <div className="flex flex-col items-center justify-center h-full text-destructive">

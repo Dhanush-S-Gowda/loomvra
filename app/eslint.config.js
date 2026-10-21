@@ -8,6 +8,22 @@ export default defineConfig([
   globalIgnores(['dist']),
   {
     files: ['**/*.{js,jsx}'],
+    rules: {
+      'react-refresh/only-export-components': [
+        'error',
+        {
+          allowExportNames: [
+            'buttonVariants',
+            'Combobox',
+            'useComboboxAnchor',
+            'useMessageScroller',
+            'useMessageScrollerScrollable',
+            'useMessageScrollerVisibility',
+            'useSidebar',
+          ],
+        },
+      ],
+    },
     extends: [
       js.configs.recommended,
       reactHooks.configs.flat.recommended,

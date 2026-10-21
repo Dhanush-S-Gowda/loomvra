@@ -10,7 +10,6 @@ function overlap(a, b) {
   return width * height;
 }
 
-/** Render the actual slide and reject geometry defects that HTML validation cannot see. */
 export async function assertRenderedSlide(slide, slideNumber) {
   const browser = await chromium.launch({ headless: true });
   try {

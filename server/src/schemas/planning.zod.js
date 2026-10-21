@@ -1,11 +1,5 @@
 import { z } from "zod";
 
-/**
- * Zod schema mirroring the OpenRouter `PlanningSchema` used during the
- * design phase. Used to validate the parsed design plan before it is
- * persisted and before slide generation begins.
- */
-
 export const ProjectSchema = z.object({
   title: z.string(),
   topic: z.string(),

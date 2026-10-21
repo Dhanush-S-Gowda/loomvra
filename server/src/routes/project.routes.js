@@ -18,14 +18,10 @@ import { renderSlide, processSlide } from "../pipeline/index.js";
 import StorageMng from "../services/StorageMng.js";
 import designQueue from "../queues/design.queue.js";
 import slidesQueue from "../queues/slides.queue.js";
-import { exportPdf, exportPptx } from "../services/exporter.js";
+import { captureSlideImage, exportPdf, exportPptx } from "../services/exporter.js";
 
 const router = Router();
 
-/**
- * Parse a stored slide (raw `{ css, html }` JSON) from the database.
- * Returns null if the stored value is missing or invalid.
- */
 function parseStoredSlide(raw) {
     if (!raw) return null;
     try {
@@ -199,8 +195,6 @@ router.get("/project/:id", (req, res) => {
     const designState = project.design_state || "pending";
     const slidesState = project.slides_state || "pending";
     const projectName = project.name || "Untitled Project";
-
-    // Design failed but slides never started.
     if (designState === "failed") {
       return res.json({
         projectId: `proj-${projectId}`,
@@ -241,8 +235,6 @@ router.get("/project/:id", (req, res) => {
         name: projectName,
       });
     }
-
-    // Design done, slides failed.
     if (slidesState === "failed") {
       return res.json({
         projectId: `proj-${projectId}`,
@@ -253,8 +245,6 @@ router.get("/project/:id", (req, res) => {
         progressMessage: project.progress_message,
       });
     }
-
-    // Design done, slides still processing.
     if (slidesState !== "completed") {
       const slides = getSlidesByProject(projectId)
         .map((s) => {
@@ -277,8 +267,6 @@ router.get("/project/:id", (req, res) => {
         slides,
       });
     }
-
-    // Both done — return rendered HTML.
     const slidesData = getSlidesByProject(projectId);
     const slides = slidesData
       .map((s) => {
@@ -303,10 +291,6 @@ router.get("/project/:id", (req, res) => {
   }
 });
 
-/**
- * Decode a base64 data URL and persist it to the local Images directory via
- * StorageMng. Returns the served URL path (e.g. "/images/...").
- */
 async function saveBase64Image(projectId, dataUrl) {
   const match = dataUrl.match(/^data:image\/(png|jpeg|jpg|webp);base64,(.+)$/);
   if (!match) {
@@ -321,11 +305,6 @@ async function saveBase64Image(projectId, dataUrl) {
   return StorageMng.getUrl(filename);
 }
 
-/**
- * POST /project/:id/images
- * Accepts a browser image data URL or an external/Pexels URL. External URLs
- * intentionally remain unchanged; uploaded bytes are persisted locally.
- */
 router.post("/project/:id/images", async (req, res) => {
   try {
     const projectId = req.params.id;
@@ -348,10 +327,25 @@ router.post("/project/:id/images", async (req, res) => {
   }
 });
 
-/**
- * Walk the design plan's slide images and replace any base64 data URL `src`
- * with a locally-stored served URL. Pexels/external URLs are kept as-is.
- */
+router.post("/project/:id/slide-image", async (req, res) => {
+  const projectId = String(req.params.id).replace(/^proj-/, "");
+  const slideNumber = Number(req.body?.slideNumber);
+  if (!getProject(projectId)) return res.status(404).json({ error: "Project not found" });
+  if (!Number.isInteger(slideNumber) || slideNumber < 1) {
+    return res.status(400).json({ error: "A valid slideNumber is required." });
+  }
+
+  try {
+    const image = await captureSlideImage(projectId, slideNumber);
+    const filename = `project-${projectId}-slide-${slideNumber}-${Date.now()}.png`;
+    await StorageMng.put(filename, image);
+    return res.json({ url: StorageMng.getUrl(filename) });
+  } catch (err) {
+    console.error("[POST /project/:id/slide-image]", err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 async function persistDesignPlanImages(projectId, designPlan) {
   if (!designPlan) return designPlan;
   const images = [];
@@ -383,19 +377,6 @@ router.patch("/project/:id/title", (req, res) => {
   }
 });
 
-/**
- * Revert (undo) or re-apply (redo) a batch of AI slide edits directly against
- * the stored composed slide, then return the re-rendered content for each
- * touched slide so the frontend can refresh its preview.
- *
- * Each `change` entry: `{ slideNumber, target: "css"|"html", oldCode, newCode }`.
- *  - undo: replace newCode -> oldCode
- *  - redo: replace oldCode -> newCode
- *
- * For a given slide the edits are applied in reverse order on undo (and in
- * forward order on redo) by re-reading the freshly written row each iteration,
- * so multiple edits to the same slide/field compose correctly.
- */
 function applyEditReplacement(projectId, changes, direction) {
   const ordered = direction === "undo" ? [...changes].reverse() : changes;
   const rendered = new Map();
@@ -404,8 +385,6 @@ function applyEditReplacement(projectId, changes, direction) {
     const number = Number(change.slideNumber);
     const target = change.target === "css" ? "css" : change.target === "html" ? "html" : null;
     if (!Number.isInteger(number) || !target) continue;
-
-    // On undo the edit must be reversed; on redo it is re-applied forward.
     const oldCode = direction === "undo" ? change.newCode : change.oldCode;
     const newCode = direction === "undo" ? change.oldCode : change.newCode;
     if (typeof oldCode !== "string" || !oldCode || typeof newCode !== "string") continue;
@@ -448,10 +427,8 @@ function handleEditHistory(req, res, direction) {
   }
 }
 
-/** POST /project/:id/edits/undo — revert the last AI edit batch. */
 router.post("/project/:id/edits/undo", (req, res) => handleEditHistory(req, res, "undo"));
 
-/** POST /project/:id/edits/redo — re-apply a previously undone AI edit batch. */
 router.post("/project/:id/edits/redo", (req, res) => handleEditHistory(req, res, "redo"));
 
 router.patch("/project/:id", async (req, res) => {
@@ -550,8 +527,6 @@ router.post("/retry-design", async (req, res) => {
         .status(422)
         .json({ error: "Model not set. Please configure a model in settings." });
     }
-
-    // If already processing, reject the duplicate.
     if (project.design_state === "processing") {
       return res.status(409).json({
         error: "Design plan is already being generated.",
@@ -644,8 +619,6 @@ router.post("/start-crafting/:id", async (req, res) => {
         state: "slides_completed",
       });
     }
-
-    // re-validate the design plan in DB before queueing.
     let designPlan = null;
     if (project.design_plan) {
       try {

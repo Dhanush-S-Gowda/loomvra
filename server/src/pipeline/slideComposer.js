@@ -11,7 +11,6 @@ function styleBody(css) {
   return match ? match[1] : "";
 }
 
-/** Keep model CSS from changing the immutable master frame or global page. */
 export function sanitizeSlideCss(css) {
   const source = styleBody(css);
   if (!source.trim()) return "";
@@ -30,11 +29,6 @@ function directChildren($root) {
   return $root.children().toArray();
 }
 
-/**
- * Compose a model response into the server-owned master template. Older model
- * responses that contain a full slide remain supported; their master-like
- * regions are discarded rather than layered on top of the canonical master.
- */
 export function composeSlideOutput(raw, masterTemplate) {
   const candidate = normalizeSlideOutput(raw);
   const master = normalizeSlideOutput(masterTemplate);

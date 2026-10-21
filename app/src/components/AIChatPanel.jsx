@@ -126,6 +126,7 @@ export function AIChatPanel({
   const [messages, setMessages] = useState(INITIAL_MESSAGES);
   const [input, setInput] = useState('');
   const [isBusy, setIsBusy] = useState(false);
+  const [isCapturingSlide, setIsCapturingSlide] = useState(false);
   const [pendingImage, setPendingImage] = useState(null); // { src, purpose? }
   const [imageReference, setImageReference] = useState(null);
 
@@ -135,7 +136,6 @@ export function AIChatPanel({
   const [imagePickerOpen, setImagePickerOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const socketRef = useRef(null);
-  // Undo/redo history: each stack entry is one AI edit batch `changes[]`.
   const [undoStack, setUndoStack] = useState([]);
   const [redoStack, setRedoStack] = useState([]);
   const [isHistoryBusy, setIsHistoryBusy] = useState(false);
@@ -189,8 +189,6 @@ export function AIChatPanel({
       } else if (message.type === 'complete') {
         setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: 'assistant', content: message.message }]);
         onSlidesUpdated?.(message.changes || []);
-        // Push this edit batch onto the undo history and clear any stale redo
-        // branch, since the document state has advanced forward.
         if (message.changes?.length) {
           setUndoStack((prev) => [...prev, message.changes]);
           setRedoStack([]);
@@ -209,8 +207,6 @@ export function AIChatPanel({
     socket.onerror = () => setIsBusy(false);
     return () => { socket.close(); socketRef.current = null; };
   }, [projectId, onSlidesUpdated]);
-
-  // Slide selection state
   const [selectedSlides, setSelectedSlides] = useState(new Set());
 
   const allSlidesSelected = selectedSlides.size === slideCount && slideCount > 0;
@@ -271,8 +267,8 @@ export function AIChatPanel({
     socket.send(JSON.stringify({
       type: 'edit', prompt: text || 'Use the attached image in the most appropriate selected slide.',
       slideNumbers: [...selectedSlides], images: [
-        ...(imageReference ? [{ url: imageReference.src, purpose: `Reference image from slide ${imageReference.slideNumber}` }] : []),
-        ...(image ? [{ url: image.src, purpose: image.purpose }] : []),
+        ...(imageReference ? [{ kind: 'asset', url: imageReference.src, purpose: `Reference image from slide ${imageReference.slideNumber}` }] : []),
+        ...(image ? [{ kind: image.kind || 'asset', url: image.src, purpose: image.purpose }] : []),
       ],
     }));
   }, [input, pendingImage, imageReference, isBusy, projectId, selectedSlides]);
@@ -305,26 +301,27 @@ export function AIChatPanel({
     setPendingImage({
       src: imageData.src,
       purpose: imageData.purpose || 'Image',
+      kind: 'asset',
       keepInline: Boolean(imageData.keepInline),
     });
   }, []);
 
   const handleAttachCurrentSlide = useCallback(async () => {
-    if (!onCaptureCurrentSlide || isBusy) return;
+    if (!onCaptureCurrentSlide || isBusy || isCapturingSlide) return;
+    setIsCapturingSlide(true);
     try {
       const src = await onCaptureCurrentSlide();
-      setPendingImage({ src, purpose: 'Current slide', keepInline: true });
+      setPendingImage({ src, purpose: 'Current slide', kind: 'slide', keepInline: true });
     } catch (error) {
       setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: 'assistant', content: `Error: ${error.message}` }]);
+    } finally {
+      setIsCapturingSlide(false);
     }
-  }, [onCaptureCurrentSlide, isBusy]);
+  }, [onCaptureCurrentSlide, isBusy, isCapturingSlide]);
 
   const handleToggleImageReferenceMode = useCallback(() => {
     onImageReferenceModeChange?.(!isSelectingImageReference);
   }, [onImageReferenceModeChange, isSelectingImageReference]);
-
-  // Shared logic for undo/redo: call the server to reverse/re-apply an edit
-  // batch, refresh the preview, then move the batch between the history stacks.
   const moveHistory = useCallback(
     async (direction) => {
       const source = direction === 'undo' ? undoStack : redoStack;
@@ -402,7 +399,7 @@ export function AIChatPanel({
       ) : (
       <Card className="relative flex h-full shrink-0 flex-col gap-0 overflow-hidden rounded-none border shadow-xl" style={{ width: panelWidth, backgroundColor: 'var(--chat-panel)' }}>
         <button type="button" aria-label="Resize AI Assistant" onMouseDown={startResize} className="absolute inset-y-0 left-0 z-20 flex w-2 cursor-ew-resize items-center justify-center bg-transparent hover:bg-primary/10"><GripVertical className="h-8 w-3 text-muted-foreground/40" /></button>
-        {/* Header */}
+
         <CardHeader className="shrink-0 gap-0 border-b px-4 py-3">
           <div className="flex items-center justify-between">
             <div className="flex flex-col">
@@ -469,7 +466,6 @@ export function AIChatPanel({
           </div>
         </CardHeader>
 
-        {/* Messages */}
         <CardContent className="flex-1 overflow-hidden p-0">
           {messages.length === 0 ? (
             <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center text-muted-foreground">
@@ -513,7 +509,6 @@ export function AIChatPanel({
           )}
         </CardContent>
 
-        {/* Footer */}
         <CardFooter className="shrink-0 flex-col gap-2 border-t bg-[var(--chat-surface)] p-3">
           <Tooltip>
             <TooltipTrigger className="block w-full cursor-help bg-transparent p-0 text-left">
@@ -587,7 +582,7 @@ export function AIChatPanel({
               />
               <InputGroupAddon align="block-end" className="pt-1 gap-1.5">
                 <div className="flex w-full align-middle gap-1.5">
-                  {/* Slide selector */}
+
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <InputGroupButton
@@ -625,7 +620,6 @@ export function AIChatPanel({
                     </DropdownMenuContent>
                   </DropdownMenu>
 
-                  {/* Add image button — opens upload / Pexels picker */}
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <InputGroupButton
@@ -650,12 +644,13 @@ export function AIChatPanel({
                         type="button"
                         size="xs"
                         variant="ghost"
-                        aria-label="Attach current slide as an image"
+                        aria-label={isCapturingSlide ? 'Preparing slide image' : 'Attach current slide as an image'}
+                        aria-busy={isCapturingSlide}
                         onClick={handleAttachCurrentSlide}
-                        disabled={isBusy || !onCaptureCurrentSlide}
+                        disabled={isBusy || isCapturingSlide || !onCaptureCurrentSlide}
                         className="shrink-0 border border-zinc-500 px-2 text-muted-foreground hover:text-foreground"
                       >
-                        <PanelsTopLeft className="h-4 w-4" />
+                        {isCapturingSlide ? <GridPulse size="tiny" decorative className="shrink-0" /> : <PanelsTopLeft className="h-4 w-4" />}
                       </InputGroupButton>
                     </TooltipTrigger>
                     <TooltipContent>Send the currently open slide as an image attachment with your prompt.</TooltipContent>
@@ -679,7 +674,6 @@ export function AIChatPanel({
                     <TooltipContent>{isSelectingImageReference ? 'Click an image on the slide, or click again to cancel' : 'Select an image on the slide as a reference'}</TooltipContent>
                   </Tooltip>
 
-                  {/* Send button */}
                   {isBusy ? (
                     <InputGroupButton type="button" variant="default" size="icon-sm" onClick={handleStop} className="ml-auto shrink-0" aria-label="Stop generation">
                       <Square className="h-3.5 w-3.5 fill-current" />

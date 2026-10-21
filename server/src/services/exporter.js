@@ -85,6 +85,22 @@ export async function exportPdf(projectId) {
   }
 }
 
+export async function captureSlideImage(projectId, slideNumber) {
+  const slides = await buildSlides(projectId);
+  const slide = slides.find(({ number }) => number === slideNumber);
+  if (!slide) throw new Error(`Slide ${slideNumber} not found.`);
+
+  const browser = await chromium.launch({ headless: true });
+  try {
+    const page = await browser.newPage({ viewport: { width: SLIDE_WIDTH, height: SLIDE_HEIGHT } });
+    await page.setContent(slide.document, { waitUntil: "load" });
+    await page.evaluate(() => document.fonts?.ready);
+    return await page.locator(".slide").screenshot({ type: "png" });
+  } finally {
+    await browser.close();
+  }
+}
+
 export async function exportPptx(projectId) {
   const slides = await buildSlides(projectId);
   const browser = await chromium.launch({ headless: true });

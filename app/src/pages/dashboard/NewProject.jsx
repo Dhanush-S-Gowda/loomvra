@@ -80,7 +80,7 @@ function NewProject() {
 
   return (
     <form onSubmit={handleSubmit} className="relative h-full min-h-0 w-full overflow-x-hidden overflow-y-auto overscroll-contain">
-      {/* Base background — same brand language as the home page */}
+
       <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
         <div className="absolute -left-24 -top-28 size-96 rounded-full bg-[radial-gradient(circle,var(--blob-green),transparent_68%)] opacity-25 blur-3xl dark:opacity-20" />
         <div className="absolute right-[-9rem] top-28 size-[32rem] rounded-full bg-[radial-gradient(circle,var(--blob-slate),transparent_68%)] opacity-20 blur-3xl dark:opacity-15" />
@@ -88,9 +88,8 @@ function NewProject() {
         <div className="bg-noise absolute inset-0 opacity-[0.035]" />
       </div>
 
-      {/* Single, focused composer column — left aligned like a document */}
       <div className="relative z-10 mx-auto flex min-h-full max-w-2xl flex-col justify-center px-6 py-12 sm:py-16">
-        {/* Eyebrow + heading reuse the home page's exact voice */}
+
         <p className="mb-5 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.22em] text-primary">
           <span className="size-2 rounded-full bg-primary" /> New project
         </p>
@@ -101,7 +100,6 @@ function NewProject() {
           Give it a name and a short brief. We'll turn the direction into a story, then a deck you can edit.
         </p>
 
-        {/* Inputs — no card, no tooltips, just clean fields */}
         <div className="mt-12 space-y-8">
           <div className="space-y-2.5">
             <label

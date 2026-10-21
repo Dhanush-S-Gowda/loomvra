@@ -27,7 +27,6 @@ worker.on("failed", (job, err) => {
 });
 
 worker.on("error", (err) => {
-  // Prevent unhandled worker errors from terminating the process.
   console.error("[DesignWorker] Worker error:", err?.message || err);
 });
 

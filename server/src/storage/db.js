@@ -7,7 +7,6 @@ const __dirname = path.dirname(__filename);
 
 const db = new Database(path.resolve(__dirname, "../../app.db"));
 
-// Enable WAL mode for better concurrent reads
 db.pragma("journal_mode = WAL");
 db.pragma("foreign_keys = ON");
 
@@ -37,6 +36,8 @@ db.exec(`
     design_error TEXT DEFAULT NULL,
     slides_error TEXT DEFAULT NULL,
     master_template TEXT DEFAULT NULL,
+    progress INTEGER DEFAULT 0,
+    progress_message TEXT DEFAULT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CHECK (design_state IN ('pending', 'processing', 'completed', 'failed')),
     CHECK (slides_state IN ('pending', 'processing', 'completed', 'failed'))
@@ -76,48 +77,8 @@ db.exec(`
   );
 `);
 
-// Additive migrations for databases created before agent sessions existed.
-// CREATE TABLE IF NOT EXISTS above is safe for new databases; these ALTERs
-// cover installations that already have the tables from an earlier shape.
-for (const statement of [
-  "ALTER TABLE settings ADD COLUMN design_model_context_limit INTEGER NOT NULL DEFAULT 32768",
-  "ALTER TABLE settings ADD COLUMN main_model_context_limit INTEGER NOT NULL DEFAULT 32768",
-  "ALTER TABLE settings ADD COLUMN small_model_context_limit INTEGER NOT NULL DEFAULT 32768",
-  "ALTER TABLE settings ADD COLUMN design_custom_prompt TEXT NOT NULL DEFAULT ''",
-  "ALTER TABLE settings ADD COLUMN slides_custom_prompt TEXT NOT NULL DEFAULT ''",
-  "ALTER TABLE settings ADD COLUMN chat_custom_prompt TEXT NOT NULL DEFAULT ''",
-  "ALTER TABLE agent_sessions ADD COLUMN context_limit INTEGER NOT NULL DEFAULT 32768",
-  "ALTER TABLE agent_sessions ADD COLUMN prompt_tokens INTEGER NOT NULL DEFAULT 0",
-  "ALTER TABLE agent_sessions ADD COLUMN completion_tokens INTEGER NOT NULL DEFAULT 0",
-  "ALTER TABLE agent_sessions ADD COLUMN updated_at TIMESTAMP DEFAULT NULL",
-  "ALTER TABLE agent_messages ADD COLUMN tool_name TEXT DEFAULT NULL",
-  "ALTER TABLE agent_messages ADD COLUMN tool_call_id TEXT DEFAULT NULL",
-  "ALTER TABLE agent_messages ADD COLUMN metadata_json TEXT DEFAULT '{}'",
-]) {
-  try {
-    db.exec(statement);
-  } catch (err) {
-    if (!String(err.message).includes("duplicate column name")) throw err;
-  }
-}
-
-// Enforce title uniqueness at the database boundary as well as in the route.
-// The normalized expression keeps "Demo" and " demo " from colliding later.
 db.exec("CREATE UNIQUE INDEX IF NOT EXISTS project_name_unique ON project(lower(trim(name)))");
 
-// Progress columns are additive so existing SQLite databases migrate safely.
-for (const statement of [
-  "ALTER TABLE project ADD COLUMN progress INTEGER DEFAULT 0",
-  "ALTER TABLE project ADD COLUMN progress_message TEXT DEFAULT NULL",
-]) {
-  try {
-    db.exec(statement);
-  } catch (err) {
-    if (!String(err.message).includes("duplicate column name")) throw err;
-  }
-}
-
-// Singleton settings row
 db.prepare(`
   INSERT OR IGNORE INTO settings (id, openrouter_api, pexel_api, design_model, main_model, small_model)
   VALUES (1, '', '', '', '', '')
@@ -155,7 +116,7 @@ export function transitionStage(projectId, stage, toState, errorValue = null) {
 
   const stateCol = stage === "design" ? "design_state" : "slides_state";
   const errCol = stage === "design" ? "design_error" : "slides_error";
-  
+
   const sql = `UPDATE project SET ${stateCol} = ?, ${errCol} = ? WHERE id = ?`;
   const params = [toState, errorValue, projectId];
 
@@ -163,8 +124,6 @@ export function transitionStage(projectId, stage, toState, errorValue = null) {
   if (result.changes === 0) return null;
   return getProject(projectId);
 }
-
-// Helper functions
 
 export function getSettings() {
   let row = db.prepare("SELECT * FROM settings WHERE id = 1").get();
@@ -212,7 +171,6 @@ export function updateSettings(data) {
   return getSettings();
 }
 
-// ----- Project helpers -----
 export function checkProjectNameExists(name, excludeId = null) {
   const normalized = String(name ?? "").trim();
   if (!normalized) return false;
@@ -353,16 +311,5 @@ export function updateSlide(projectId, seqNum, data) {
   vals.push(projectId, seqNum);
   db.prepare(`UPDATE slides SET ${sets.join(", ")} WHERE project_id = ? AND seq_num = ?`).run(...vals);
 }
-
-// export function upsertSlide(projectId, seqNum, htmlContent, imagesPath = []) {
-//   const existing = db
-//     .prepare("SELECT id FROM slides WHERE project_id = ? AND seq_num = ?")
-//     .get(projectId, seqNum);
-//   if (existing) {
-//     updateSlide(existing.id, { html_content: htmlContent, images_path: imagesPath });
-//     return existing.id;
-//   }
-//   return createSlide(projectId, seqNum, htmlContent, imagesPath);
-// }
 
 export default db;

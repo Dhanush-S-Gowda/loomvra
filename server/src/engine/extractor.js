@@ -354,11 +354,6 @@ export default () => {
         if (!text.trim()) return null;
         return { text, style: pseudoStyle };
     }
-
-    // =====================================
-    // ROOT SLIDE
-    // =====================================
-
     const slide = document.querySelector(".slide");
 
     if (!slide) {
@@ -388,11 +383,6 @@ export default () => {
     scene.slides[0].elements.push(...rootBackground);
 
     const elements = Array.from(slide.querySelectorAll("*"));
-
-    // =====================================
-    // EXTRACT VISUAL ELEMENTS
-    // =====================================
-
     elements.forEach((el) => {
         const tag = el.tagName.toLowerCase();
 
@@ -403,19 +393,9 @@ export default () => {
         if (!isVisible(rect, style)) {
             return;
         }
-
-        // ---------------------------------
-        // Relative to slide
-        // ---------------------------------
-
         const x = rect.x - slideRect.x;
 
         const y = rect.y - slideRect.y;
-
-        // =================================
-        // INLINE SVG ICON / VECTOR IMAGE
-        // =================================
-
         if (tag === "svg") {
             scene.slides[0].elements.push({
                 kind: "image",
@@ -451,11 +431,6 @@ export default () => {
                 if (tag === "i") return;
             }
         }
-
-        // =================================
-        // IMAGE
-        // =================================
-
         if (tag === "img") {
             scene.slides[0].elements.push({
                 kind: "image",
@@ -476,8 +451,6 @@ export default () => {
                     objectFit: style.objectFit,
                     objectPosition: style.objectPosition,
                     rotate: 0,
-
-                    // Border properties (all sides)
                     borderTopWidth: px(style.borderTopWidth),
                     borderRightWidth: px(style.borderRightWidth),
                     borderBottomWidth: px(style.borderBottomWidth),
@@ -503,11 +476,6 @@ export default () => {
 
             return;
         }
-
-        // =================================
-        // TEXT
-        // =================================
-
         const ownTextNodes = Array.from(el.childNodes).filter(
             (node) =>
                 node.nodeType === Node.TEXT_NODE &&
@@ -579,7 +547,6 @@ export default () => {
                 },
 
                 style: {
-                    // Typography
                     fontFamily: style.fontFamily,
                     fontSize: px(style.fontSize),
                     fontWeight: parseInt(style.fontWeight) || 400,
@@ -605,7 +572,6 @@ export default () => {
                     color: rgbaToHex(style.color),
                     colorAlpha: rgbaToAlpha(style.color),
                     textAlign: style.textAlign,
-                    // Visual properties
                     background: rgbaToHex(style.backgroundColor),
                     backgroundAlpha: rgbaToAlpha(style.backgroundColor),
                     backgroundImage: style.backgroundImage !== "none" ? style.backgroundImage : null,
@@ -614,7 +580,6 @@ export default () => {
                     backgroundRepeat: style.backgroundRepeat,
                     backgroundBlendMode: style.backgroundBlendMode,
                     opacity: parseFloat(style.opacity),
-                    // Border properties (all sides individually)
                     borderTopWidth: px(style.borderTopWidth),
                     borderRightWidth: px(style.borderRightWidth),
                     borderBottomWidth: px(style.borderBottomWidth),
@@ -631,13 +596,11 @@ export default () => {
                     borderRightStyle: style.borderRightStyle,
                     borderBottomStyle: style.borderBottomStyle,
                     borderLeftStyle: style.borderLeftStyle,
-                    // Radius and shadow
                     borderRadius: borderRadii(style),
                     boxShadow:
                         style.boxShadow && style.boxShadow !== "none"
                             ? style.boxShadow
                             : null,
-                    // Spacing
                     paddingTop: px(style.paddingTop),
                     paddingRight: px(style.paddingRight),
                     paddingBottom: px(style.paddingBottom),
@@ -646,7 +609,6 @@ export default () => {
                     marginRight: px(style.marginRight),
                     marginBottom: px(style.marginBottom),
                     marginLeft: px(style.marginLeft),
-                    // Layout
                     display: style.display,
                     containerDisplay: containerDisplay,
                     containerJustifyContent: containerJustifyContent,
@@ -661,8 +623,6 @@ export default () => {
                     zIndex: getZIndex(style),
                 },
             };
-
-            // Extract href if element is <a> tag
             if (tag === "a") {
                 textObj.href = el.href || "";
             }
@@ -724,11 +684,6 @@ export default () => {
 
             return;
         }
-
-        // =================================
-        // SHAPE
-        // =================================
-
         const hasBackground = hasVisualBackground(style);
         const hasBackgroundImage = style.backgroundImage && style.backgroundImage !== "none";
 
@@ -765,7 +720,6 @@ export default () => {
                     backgroundRepeat: style.backgroundRepeat,
                     backgroundBlendMode: style.backgroundBlendMode,
                     borderRadius: borderRadii(style),
-                    // Border properties (all sides individually)
                     borderTopWidth: px(style.borderTopWidth),
                     borderRightWidth: px(style.borderRightWidth),
                     borderBottomWidth: px(style.borderBottomWidth),
@@ -786,7 +740,6 @@ export default () => {
                         style.boxShadow && style.boxShadow !== "none"
                             ? style.boxShadow
                             : null,
-                    // Spacing
                     paddingTop: px(style.paddingTop),
                     paddingRight: px(style.paddingRight),
                     paddingBottom: px(style.paddingBottom),
@@ -808,11 +761,6 @@ export default () => {
             scene.slides[0].elements.push(...backgroundImage);
         }
     });
-
-    // =====================================
-    // SORT BY Z INDEX
-    // =====================================
-
     scene.slides[0].elements.sort(
         (a, b) => (a.style.zIndex || 0) - (b.style.zIndex || 0),
     );

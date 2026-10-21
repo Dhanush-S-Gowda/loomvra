@@ -3,6 +3,7 @@ import { chatCompletion } from "../services/openrouter.js";
 import { searchImages } from "../services/pexels.js";
 import { getProject, getSettings, getSlidesByProject, updateSlide, getOrCreateAgentSession, updateAgentSessionContextLimit, getAgentMessages, addAgentMessage, updateAgentUsage, resetAgentSession } from "../storage/db.js";
 import { processSlide, renderSlide, assertRenderedSlide } from "../pipeline/index.js";
+import StorageMng from "../services/StorageMng.js";
 
 const EDITOR_SYSTEM = `You are an agentic presentation editor. Explain your plan briefly, inspect the supplied slides, and use tools for every change. Never return JSON edit plans.
 
@@ -18,11 +19,46 @@ IMAGE TOOL RULES:
 - If the user asks for an image, call search_image first, then use one returned URL exactly in a later edit call as an HTML image src or CSS background URL.
 - Do not claim to have visually inspected the image; describe it only using the returned alt text and photographer metadata.
 
+ATTACHED IMAGES:
+- User-uploaded and Pexels attachments are asset links included in the user message. Use their URL directly in the slide when asked to add them, and follow the user's caption or purpose.
+- A current-slide attachment is visual context supplied as an image input. Treat it as a reference for the slide, not an asset to insert.
+
 After tools finish, clearly summarize what changed. Preserve the slide master and unrelated code. Only make safe, validated edits.`;
 const TOOLS = [
   { type: "function", function: { name: "edit", description: "Apply one minimal exact replacement to a slide.", parameters: { type: "object", additionalProperties: false, properties: { slideNumber: { type: "integer" }, target: { type: "string", enum: ["html", "css"] }, oldCode: { type: "string" }, newCode: { type: "string" }, reason: { type: "string" } }, required: ["slideNumber", "target", "oldCode", "newCode", "reason"] } } },
   { type: "function", function: { name: "search_image", description: "Search Pexels for images for the presentation.", parameters: { type: "object", additionalProperties: false, properties: { query: { type: "string" }, orientation: { type: "string", enum: ["landscape", "portrait", "square"] }, count: { type: "integer", minimum: 1, maximum: 8 } }, required: ["query"] } } },
 ];
+
+const IMAGE_MIME_TYPES = {
+  avif: "image/avif",
+  gif: "image/gif",
+  jpeg: "image/jpeg",
+  jpg: "image/jpeg",
+  png: "image/png",
+  svg: "image/svg+xml",
+  webp: "image/webp",
+};
+
+async function resolveImageForModel(imageUrl) {
+  if (imageUrl.startsWith("data:image/")) return imageUrl;
+
+  const url = new URL(imageUrl);
+  const imageBase = new URL(StorageMng.getUrl("placeholder.png"));
+  const isLocalImage = url.pathname.startsWith("/images/") && (
+    url.origin === imageBase.origin ||
+    ["localhost", "127.0.0.1", "::1"].includes(url.hostname)
+  );
+
+  if (!isLocalImage) return imageUrl;
+
+  const filename = decodeURIComponent(url.pathname.slice("/images/".length));
+  const extension = filename.split(".").pop()?.toLowerCase();
+  const mimeType = IMAGE_MIME_TYPES[extension];
+  if (!mimeType) throw new Error("Unsupported image type in the selected slide.");
+
+  const image = await StorageMng.read(filename);
+  return `data:${mimeType};base64,${image.toString("base64")}`;
+}
 
 function send(socket, type, payload = {}) { if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type, ...payload })); }
 function toolArgs(call) {
@@ -104,7 +140,11 @@ export function attachEditorWebSocket(server) {
           prompt: message.prompt,
           selectedSlides: message.slideNumbers || [],
           // Avoid storing inline image bytes in the conversation database.
-          images: images.map(({ purpose, url }) => ({ purpose, ...(url?.startsWith("data:") ? {} : { url }) })),
+          images: images.map(({ kind, purpose, url }) => ({
+            kind: kind || "asset",
+            purpose,
+            ...(url?.startsWith("data:") ? {} : { url }),
+          })),
         });
         const currentUserMessage = addAgentMessage(projectId, "user", userContent, { slideNumbers: message.slideNumbers || [] });
         // Tool messages are intentionally not replayed across requests. Older
@@ -127,17 +167,41 @@ export function attachEditorWebSocket(server) {
               const content = [
                 { type: "text", text: `${parsed.prompt}${parsed.selectedSlides?.length ? `\nSelected slides: ${parsed.selectedSlides.join(", ")}` : ""}` },
                 ...userImages
-                  .map((image) => image?.url || image?.src)
-                  .filter((url) => typeof url === "string" && url)
-                  // @openrouter/sdk uses camelCase input models and maps this
-                  // field to the wire-level `image_url` property itself.
-                  .map((url) => ({ type: "image_url", imageUrl: { url } })),
+                  .flatMap((image) => {
+                    const url = image?.url || image?.src;
+                    if (typeof url !== "string" || !url) return [];
+
+                    if (image.kind === "slide" || url.startsWith("data:image/")) {
+                      return [
+                        {
+                          type: "text",
+                          text: `Attached slide image${image.purpose ? ` (${image.purpose})` : ""}.`,
+                        },
+                        { type: "image_url", imageUrl: { url } },
+                      ];
+                    }
+
+                    return [{
+                      type: "text",
+                      text: `Attached image asset${image.purpose ? ` (${image.purpose})` : ""}. Use this URL when adding it to a slide: ${url}`,
+                    }];
+                  }),
               ];
               return { role: item.role, content };
             }
           }
           return { role: item.role, content: item.content, ...(toolCalls.length ? { toolCalls } : {}) };
         });
+        for (const item of stored) {
+          if (item.role !== "user" || !Array.isArray(item.content)) continue;
+          item.content = await Promise.all(item.content.map(async (part) => {
+            if (part.type !== "image_url" || typeof part.imageUrl?.url !== "string") return part;
+            return {
+              ...part,
+              imageUrl: { ...part.imageUrl, url: await resolveImageForModel(part.imageUrl.url) },
+            };
+          }));
+        }
         const responseMessages = [{ role: "system", content: `${editorSystemPrompt}\nProject: ${project.name}\nCurrent slides:\n${JSON.stringify(slideContext(projectId))}` }, ...stored];
         const changes = [];
         const run = { cancelled: false };

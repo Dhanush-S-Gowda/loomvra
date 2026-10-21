@@ -42,7 +42,7 @@ import {
   Heart,
 } from 'lucide-react';
 import { GridPulse } from '@/components/GridLoadingScreen';
-import { useTheme } from '@/components/ThemeProvider';
+import { useTheme } from '@/components/use-theme';
 import { getAllProjects, deleteProject, renameProject } from '@/lib/api';
 import { toast } from "sonner";
 import BrandLogo from '@/components/BrandLogo';
@@ -59,12 +59,10 @@ function Sidebar() {
   const fetchProjects = () => {
     getAllProjects(1, 50)
       .then((res) => {
-        // res might be an array or { projects: [...] }
         const list = Array.isArray(res) ? res : (res.projects || []);
         setProjects(list);
       })
       .catch(() => {
-        // Silently fail — sidebar projects are non-critical
       })
       .finally(() => setLoading(false));
   };

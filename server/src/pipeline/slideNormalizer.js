@@ -1,25 +1,7 @@
 import * as cheerio from "cheerio";
 
-/**
- * Normalizer
- *
- * Takes the raw `{ css, html }` output from the model and repairs common
- * structural defects so the downstream Validator can rely on a stable shape.
- *
- * Repairs performed:
- *   - css: ensure it is a single `<style>` block (wrap if missing).
- *   - html: strip document-level tags (`<html>`, `<head>`, `<body>`, doctype).
- *   - html: remove duplicate `.slide` wrappers (keep the outermost).
- *   - html: ensure the root element is a `<div class="slide">` (wrap if missing).
- */
-
 const ROOT_CLASS = "slide";
 
-/**
- * Ensure the css value is a single `<style>...</style>` block.
- * If the value already starts with `<style` it is returned as-is; otherwise
- * the raw CSS is wrapped in a `<style>` tag.
- */
 function normalizeCss(css) {
   let value = String(css ?? "").trim();
   if (!value) return "";
@@ -31,9 +13,6 @@ function normalizeCss(css) {
   return `<style>\n${value}\n</style>`;
 }
 
-/**
- * Remove document-level tags and any surrounding whitespace.
- */
 function stripDocumentTags(html) {
   let s = String(html ?? "").trim();
   s = s.replace(/<\!doctype[^>]*>/gi, "");
@@ -41,13 +20,6 @@ function stripDocumentTags(html) {
   return s.trim();
 }
 
-/**
- * Remove duplicate `.slide` wrappers, keeping the outermost one.
- *
- * The model is instructed to return the full slide (master wrapper + content)
- * so it may occasionally nest an extra `.slide` wrapper. This collapses any
- * `.slide` that is a direct descendant of another `.slide`.
- */
 function removeDuplicateWrappers($) {
   // Repeatedly unwrap inner .slide wrappers until no direct nesting remains.
   let changed = true;
@@ -63,10 +35,6 @@ function removeDuplicateWrappers($) {
   return $;
 }
 
-/**
- * Ensure the html has a single root `<div class="slide">...</div>`.
- * If the root is not a `.slide` div, wrap the entire content in one.
- */
 function ensureRootSlide($) {
   const root = $("body").children().first();
   if (root.length === 0) {
@@ -90,12 +58,6 @@ function ensureRootSlide($) {
   return $;
 }
 
-/**
- * Normalize a `{ css, html }` slide object.
- *
- * @param {Object} input - Raw output, e.g. `{ css, html }`.
- * @returns {{ css: string, html: string }} Normalized css/html.
- */
 export function normalizeSlideOutput(input = {}) {
   const css = normalizeCss(input.css);
 

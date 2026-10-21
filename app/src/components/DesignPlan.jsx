@@ -152,10 +152,8 @@ function DesignPlan({ data, projectId }) {
     }
     setSaving(true);
     try {
-      // Merge the edited slides back into the plan before persisting.
       const payload = { ...plan, slides };
       const result = await saveProject(projectId, { design_plan: payload });
-      // Reflect the server's canonical (image-persisted) plan back into state.
       setPlan(result);
       setSlides(result.slides);
       toast.success("Design plan saved");
@@ -221,7 +219,6 @@ function DesignPlan({ data, projectId }) {
         if (s.number !== slideNumber) return s;
         const newImages = [...s.images];
         const existing = newImages[imgIndex];
-        // Images are stored as objects ({ src, ... }) on the server.
         newImages[imgIndex] =
           existing && typeof existing === "object"
             ? { ...existing, src: value }
@@ -269,7 +266,7 @@ function DesignPlan({ data, projectId }) {
       );
     }
     setImagePickerTarget(null);
-  }, [imagePickerTarget, updateSlideImage]);
+  }, [imagePickerTarget, updateMasterTemplate, updateSlideImage]);
 
   const removeMasterImage = useCallback(() => {
     setPlan((prev) => {
@@ -294,8 +291,6 @@ function DesignPlan({ data, projectId }) {
     setCrafting(true);
     try {
       await startCrafting(projectId);
-      // Reload the project route after the server queues slide generation so
-      // Project fetches its new state and starts the slide progress screen.
       window.location.reload();
     } catch (err) {
       toast.error(err.message);
@@ -311,7 +306,7 @@ function DesignPlan({ data, projectId }) {
 
   return (
     <div className="space-y-10 p-6 md:p-10 max-w-6xl mx-auto h-full overflow-y-auto scrollbar-none [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
-      {/* Header */}
+
       <div className="flex items-center justify-between">
         <div>
           <p className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.22em] text-primary">
@@ -341,7 +336,6 @@ function DesignPlan({ data, projectId }) {
         </Button>
       </div>
 
-      {/* Project Overview */}
       <section className="space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -453,7 +447,6 @@ function DesignPlan({ data, projectId }) {
         </section>
       )}
 
-      {/* Global Design */}
       <section className="space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -653,7 +646,6 @@ function DesignPlan({ data, projectId }) {
         </Card>
       </section>
 
-      {/* Master Template */}
       <section className="space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -753,7 +745,6 @@ function DesignPlan({ data, projectId }) {
         </Card>
       </section>
 
-      {/* Slides */}
       <section className="space-y-5">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -934,7 +925,6 @@ function DesignPlan({ data, projectId }) {
                     )}
                   </div>
 
-                  {/* Images */}
                   <div className="pt-3 border-t border-border/60">
                     <div className="flex items-center justify-between mb-2">
                       <p className="text-xs uppercase tracking-wider text-muted-foreground">Images</p>

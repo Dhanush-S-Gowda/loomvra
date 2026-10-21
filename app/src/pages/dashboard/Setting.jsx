@@ -39,8 +39,6 @@ import {
   verifyPexelsKey,
 } from "@/lib/api";
 
-// Format pricing as "in $X / cache $Y / out $Z per 1M" (per million tokens),
-// rounded to 4 decimal places. Cache is omitted when unavailable.
 function formatPricing(model) {
   const { promptPerM, completionPerM, inputCacheReadPerM } = model.pricing;
   const round = (n) => String(Number(n).toFixed(4)).replace(/\.?0+$/, "");
@@ -51,7 +49,6 @@ function formatPricing(model) {
   return `${parts.join(" / ")} per 1M`;
 }
 
-// Find a model by its id ("provider/model_name") within the grouped list.
 function findModel(groups, id) {
   if (!id) return null;
   for (const group of groups) {
@@ -62,7 +59,6 @@ function findModel(groups, id) {
 }
 
 function ModelSelect({ label, tooltip, value, onChange, groups }) {
-  // Base UI expects each group to expose an `items` array.
   const items = groups.map((group) => ({
     value: group.provider,
     items: group.models,
@@ -129,8 +125,6 @@ function Setting() {
   const [savedApiKeys, setSavedApiKeys] = useState({ openrouter: "", pexels: "" });
   const [showApiKey, setShowApiKey] = useState(false);
   const [showPexelApiKey, setShowPexelApiKey] = useState(false);
-
-  // Fetch settings and supported models on mount
   useEffect(() => {
     (async () => {
       try {
@@ -199,8 +193,6 @@ function Setting() {
       setSaving(false);
     }
   };
-
-  // Credentials and all three model choices are required before saving.
   const canSaveModels =
     Boolean(apiKey.trim()) &&
     Boolean(pexelApiKey.trim()) &&

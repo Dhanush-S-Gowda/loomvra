@@ -1,4 +1,3 @@
-import React from 'react';
 import {BrowserRouter, Route, Routes} from 'react-router';
 import { ThemeProvider } from '@/components/ThemeProvider';
 import { Toaster } from '@/components/ui/sonner';

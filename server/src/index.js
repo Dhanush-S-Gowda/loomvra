@@ -15,8 +15,6 @@ import getSupportedModels from "./utils/getSupportedModels.js"
 process.on("unhandledRejection", (reason) => {
     console.error("[Server] Unhandled promise rejection:", reason);
 });
-
-// Start background workers
 import "./workers/design.worker.js";
 import "./workers/slides.worker.js";
 
@@ -25,8 +23,6 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-
-// CORS: allow localhost:5173
 app.use(
     cors({
         origin: "http://localhost:5173",
@@ -39,18 +35,12 @@ app.use(express.json({ limit: "50mb" }));
 
 // Serve Images directory statically so StorageMng.getUrl() paths work
 app.use("/images", express.static(path.resolve(__dirname, "../Images")));
-
-// Routes
 app.use(projectRoutes);
 app.use(settingsRoutes);
 app.use(slidesRoutes);
-
-// Health check
 app.get("/health", (_req, res) => {
     res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
-
-// Get supported models
 app.get("/models", async (_req, res) => {
     const models = await getSupportedModels();
     res.json(models);

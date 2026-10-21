@@ -8,26 +8,11 @@ import {
     createSlide,
     updateSlide,
     updateProgress,
+    transitionStage,
 } from "../storage/db.js";
 import SlideSchema from "../schemas/slide.schema.js";
 import { processSlide, composeSlideOutput, assertRenderedSlide } from "../pipeline/index.js";
 
-/**
- * Call the model with structured output, then normalize + validate the
- * `{ css, html }` result.
- *
- * On validation failure, makes ONE retry call that explains the error to the
- * model in the hope it fixes the output. If the retry also fails, the error is
- * thrown.
- *
- * @param {Object} params
- * @param {string} params.apiKey
- * @param {string} params.model
- * @param {string} params.systemPrompt
- * @param {string} params.userPrompt
- * @param {string} params.label - Human-readable label for logging (e.g. "master template", "slide 3").
- * @returns {Promise<{css: string, html: string}>} Validated slide output.
- */
 async function generateValidatedSlide({
     apiKey,
     model,
@@ -91,28 +76,11 @@ async function generateValidatedSlide({
     }
 }
 
-/**
- * Slides Generation Job
- *
- * 1. Re-fetches the design plan from the project row (defensive).
- * 2. Generates the master template with structured output `{ css, html }`
- *    and persists it as-is (raw JSON) in `project.master_template`.
- * 3. For each slide, sends the master template + slide plan to the model.
- *    The model returns a complete `{ css, html }` slide (master wrapper +
- *    content together). Each is normalized + validated and persisted as raw
- *    JSON in `slides.html_content`.
- * 4. On success, marks slides_state=completed.
- *    On any failure, marks slides_state=failed with the error message.
- */
 export async function generateSlides(data) {
     const { projectId } = data;
 
     console.log(`[SlidesJob] Starting for project ${projectId}...`);
     updateProgress(projectId, 5, "Preparing slide generation");
-
-    // -----------------------------------------------------------------
-    // 0. Defensive: re-fetch the project and verify the design plan.
-    // -----------------------------------------------------------------
     const project = getProject(projectId);
     if (!project) {
         const errMsg = `Project ${projectId} not found.`;
@@ -151,10 +119,6 @@ export async function generateSlides(data) {
         console.error(`[SlidesJob] ${errMsg}`);
         throw new Error(errMsg);
     }
-
-    // -----------------------------------------------------------------
-    // 1. Resolve settings & model.
-    // -----------------------------------------------------------------
     const settings = getSettings();
     const apiKey = settings?.openrouter_api;
     if (!apiKey) {
@@ -169,10 +133,6 @@ export async function generateSlides(data) {
         console.error(`[SlidesJob] ${errMsg}`);
         throw new Error(errMsg);
     }
-
-    // -----------------------------------------------------------------
-    // 2. Load prompt templates.
-    // -----------------------------------------------------------------
     const promptsDir = path.join(import.meta.dirname, "../prompts");
     const masterPromptText = fs.readFileSync(
         path.join(promptsDir, "slides.master-template.md"),
@@ -186,12 +146,6 @@ export async function generateSlides(data) {
     const appendCustomPrompt = (prompt) => customPrompt
         ? `${prompt}\n\n[ADDITIONAL USER INSTRUCTIONS]\n${customPrompt}`
         : prompt;
-
-    // -----------------------------------------------------------------
-    // 3. Step 1 — generate the master template with structured output.
-    //    Send only project, globalDesign, and masterTemplate plan.
-    //    Do NOT send individual slide content.
-    // -----------------------------------------------------------------
     const masterUserPayload = {
         project: designPlan.project,
         globalDesign: designPlan.globalDesign,
@@ -229,12 +183,6 @@ export async function generateSlides(data) {
         console.error(`[SlidesJob] ${errMsg}`);
         throw new Error(errMsg);
     }
-
-    // -----------------------------------------------------------------
-    // 4. Step 2 — generate each slide.
-    //    Send the FULL master template so the model can see the canvas and
-    //    styles. The model returns the complete slide (master + content).
-    // -----------------------------------------------------------------
     for (const [index, slidePlan] of designPlan.slides.entries()) {
         const seqNum = slidePlan.number;
         const slideProgress = 20 + Math.round((index / designPlan.slides.length) * 75);
@@ -288,10 +236,6 @@ export async function generateSlides(data) {
             throw new Error(errMsg);
         }
     }
-
-    // -----------------------------------------------------------------
-    // 5. Done.
-    // -----------------------------------------------------------------
     updateProgress(projectId, 100, "Slides ready");
     transitionStage(projectId, "slides", "completed");
     console.log(`[SlidesJob] Completed for project ${projectId}`);

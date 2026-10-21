@@ -4,10 +4,6 @@ import { renderSlide } from "../pipeline/index.js";
 
 const router = Router();
 
-/**
- * Parse a stored slide (raw `{ css, html }` JSON) from the database.
- * Returns null if the stored value is missing or invalid.
- */
 function parseStoredSlide(raw) {
     if (!raw) return null;
     try {
@@ -22,21 +18,6 @@ function parseStoredSlide(raw) {
     }
 }
 
-/**
- * GET /slides/:projectId
- *
- * Returns the slide-generation state for a project.
- *
- * States:
- *   - "not_found"          — project doesn't exist
- *   - "design_pending"     — design plan is not yet ready
- *   - "design_processing"  — design is currently being generated
- *   - "design_failed"      — design stage errored
- *   - "slides_pending"     — slides not yet started
- *   - "slides_processing"  — slides are being generated
- *   - "slides_failed"      — slides stage errored
- *   - "generated"          — slides are ready
- */
 router.get("/slides/:projectId", (req, res) => {
     try {
         const projectId = req.params.projectId;
@@ -108,9 +89,6 @@ router.get("/slides/:projectId", (req, res) => {
     }
 });
 
-/**
- * GET /slides/:projectId/slide/:index
- */
 router.get("/slides/:projectId/slide/:index", (req, res) => {
     try {
         const projectId = req.params.projectId;

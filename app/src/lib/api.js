@@ -1,9 +1,7 @@
 const BASE_URL = "http://localhost:3000";
 export const API_BASE_URL = BASE_URL;
 
-// Design plans created before the server URL fix may contain a frontend-origin
-// image URL (localhost:5173/images/...). Always resolve local image paths to
-// the API server, which owns the /images static route.
+// Resolve saved local image paths against the API origin.
 export function resolveImageUrl(src) {
   if (typeof src !== "string" || !src) return src;
   try {
@@ -40,12 +38,10 @@ async function request(url, options = {}) {
   return data;
 }
 
-/** GET /all-projects?page=&pageSize= */
 export function getAllProjects(page = 1, pageSize = 50) {
   return request(`/all-projects?page=${page}&pageSize=${pageSize}`);
 }
 
-/** POST /create-project */
 export function createProject(name, userDesc, brand = {}) {
   return request("/create-project", {
     method: "POST",
@@ -53,7 +49,6 @@ export function createProject(name, userDesc, brand = {}) {
   });
 }
 
-/** Download a generated project export. */
 export async function downloadProjectExport(id, format) {
   const response = await fetch(`${API_BASE_URL}/project/${id}/export/${format}`);
   if (!response.ok) {
@@ -76,12 +71,10 @@ export async function downloadProjectExport(id, format) {
   URL.revokeObjectURL(url);
 }
 
-/** GET /project/:id */
 export function getProject(id) {
   return request(`/project/${id}`);
 }
 
-/** PATCH /project/:id */
 export function updateProject(id, body) {
   return request(`/project/${id}`, {
     method: "PATCH",
@@ -89,7 +82,6 @@ export function updateProject(id, body) {
   });
 }
 
-/** PATCH /project/:id/title */
 export function renameProject(id, title) {
   return request(`/project/${id}/title`, {
     method: "PATCH",
@@ -97,12 +89,10 @@ export function renameProject(id, title) {
   });
 }
 
-/** DELETE /project/:id */
 export function deleteProject(id) {
   return request(`/project/${id}`, { method: "DELETE" });
 }
 
-/** POST /project/:id/edits/undo */
 export function undoEdits(projectId, changes) {
   return request(`/project/${projectId}/edits/undo`, {
     method: "POST",
@@ -110,7 +100,6 @@ export function undoEdits(projectId, changes) {
   });
 }
 
-/** POST /project/:id/edits/redo */
 export function redoEdits(projectId, changes) {
   return request(`/project/${projectId}/edits/redo`, {
     method: "POST",
@@ -118,7 +107,6 @@ export function redoEdits(projectId, changes) {
   });
 }
 
-/** POST /retry-design */
 export function retryDesign(projectId) {
   return request("/retry-design", {
     method: "POST",
@@ -126,28 +114,22 @@ export function retryDesign(projectId) {
   });
 }
 
-/** POST /retry-slides/:id */
 export function retrySlides(projectId) {
   return request(`/retry-slides/${projectId}`, { method: "POST" });
 }
 
-
-/** POST /start-crafting/:id */
 export function startCrafting(id) {
   return request(`/start-crafting/${id}`, { method: "POST" });
 }
 
-/** GET /models */
 export function getModels() {
   return request("/models");
 }
 
-/** GET /settings */
 export function getSettings() {
   return request("/settings");
 }
 
-/** PATCH /settings */
 export function updateSettings(body) {
   return request("/settings", {
     method: "PATCH",
@@ -155,7 +137,6 @@ export function updateSettings(body) {
   });
 }
 
-/** POST /settings/verify/openrouter */
 export function verifyOpenRouterKey(apiKey) {
   return request("/settings/verify/openrouter", {
     method: "POST",
@@ -163,7 +144,6 @@ export function verifyOpenRouterKey(apiKey) {
   });
 }
 
-/** POST /settings/verify/pexels */
 export function verifyPexelsKey(apiKey) {
   return request("/settings/verify/pexels", {
     method: "POST",

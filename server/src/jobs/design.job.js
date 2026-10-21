@@ -3,7 +3,8 @@ import { searchImage } from "../services/pexels.js";
 import {
   getSettings,
   updateProject,
-  updateProgress
+  updateProgress,
+  transitionStage,
 } from "../storage/db.js";
 import fs from "fs";
 import path from "path";

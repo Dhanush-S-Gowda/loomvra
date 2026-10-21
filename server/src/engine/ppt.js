@@ -11,10 +11,6 @@ function pxToInches(px, slideDimensionPx, slideDimensionInches) {
     return (px / slideDimensionPx) * slideDimensionInches;
 }
 
-/**
- * Clean text content: replace literal \n with space, collapse multiple spaces,
- * and trim.
- */
 function cleanText(text) {
     if (!text) return "";
     return text
@@ -63,9 +59,6 @@ function normalizeRunWhitespace(text) {
         .join("\n");
 }
 
-/**
- * Parse a CSS box-shadow string into PptxGenJS ShadowProps.
- */
 function parseBoxShadow(boxShadow) {
     if (!boxShadow || boxShadow === "none") return null;
 
@@ -110,12 +103,6 @@ function parseBoxShadow(boxShadow) {
     };
 }
 
-/**
- * Build PptxGenJS line props from per-side border styles.
- * If all sides match, returns a single line prop.
- * If only specific sides have borders, returns an array of
- * { side, lineProps } objects for drawing individual border lines.
- */
 function buildLineProps(style, frame) {
     const sides = ["Top", "Right", "Bottom", "Left"];
     const borders = sides.map((side) => ({
@@ -165,7 +152,6 @@ function buildLineProps(style, frame) {
     }));
 }
 
-/** Draw individual CSS border sides as native PowerPoint lines. */
 function drawPerSideBorders(slide, borders, frame) {
     if (!Array.isArray(borders)) return;
     for (const border of borders) {
@@ -177,10 +163,6 @@ function drawPerSideBorders(slide, borders, frame) {
     }
 }
 
-/**
- * Normalize a hex color: strip the # prefix.
- * Returns null if falsy.
- */
 function normalizeColor(color) {
     if (!color) return null;
     return color.replace("#", "");
@@ -251,15 +233,11 @@ export async function generatePresentation(scene, outputFile = null) {
             pxToInches(px, slideHeightPx, slideHeightInches);
 
         const slide = pres.addSlide();
-
-        // --- Slide background ---
         if (slideData.background) {
             slide.background = {
                 color: normalizeColor(slideData.background),
             };
         }
-
-        // --- Process each element ---
         for (const el of slideData.elements) {
             const frame = el.frame;
             const style = el.style;
@@ -272,13 +250,8 @@ export async function generatePresentation(scene, outputFile = null) {
             const basePos = { x, y, w, h };
 
             switch (el.kind) {
-                // ==========================================
-                // SHAPE
-                // ==========================================
                 case "shape": {
                     const opts = { ...basePos };
-
-                    // Fill
                     if (style.background) {
                         opts.fill = {
                             color: normalizeColor(style.background),
@@ -304,8 +277,6 @@ export async function generatePresentation(scene, outputFile = null) {
                             opts.rectRadius = pptxRadius(style.borderRadius, frame);
                         }
                     }
-
-                    // Border
                     const lineResult = buildLineProps(style, frame);
                     if (lineResult) {
                         if (Array.isArray(lineResult)) {
@@ -314,14 +285,10 @@ export async function generatePresentation(scene, outputFile = null) {
                             opts.line = lineResult.line;
                         }
                     }
-
-                    // Shadow
                     if (style.boxShadow) {
                         const shadow = parseBoxShadow(style.boxShadow);
                         if (shadow) opts.shadow = shadow;
                     }
-
-                    // Opacity -> transparency (0-100)
                     if (style.opacity !== undefined && style.opacity < 1) {
                         opts.transparency = Math.round(
                             (1 - style.opacity) * 100,
@@ -336,14 +303,8 @@ export async function generatePresentation(scene, outputFile = null) {
 
                     break;
                 }
-
-                // ==========================================
-                // TEXT
-                // ==========================================
                 case "text": {
                     const opts = { ...basePos };
-
-                    // Typography
                     if (style.fontFamily) {
                         opts.fontFace = style.fontFamily
                             .split(",")[0]
@@ -358,13 +319,9 @@ export async function generatePresentation(scene, outputFile = null) {
 
                     if (style.fontWeight >= 700) opts.bold = true;
                     if (style.fontStyle === "italic") opts.italic = true;
-
-                    // Color
                     if (style.color) {
                         opts.color = normalizeColor(style.color);
                     }
-
-                    // Text alignment
                     if (["left", "center", "right", "justify"].includes(style.textAlign)) {
                         opts.align = style.textAlign;
                     }
@@ -379,15 +336,11 @@ export async function generatePresentation(scene, outputFile = null) {
                     // CSS pixel-to-point conversion used for font size.
                     const lineHeight = style.lineHeight || (style.fontSize ? style.fontSize * 1.2 : 0);
                     if (lineHeight > 0) opts.lineSpacing = lineHeight * 0.75;
-
-                    // Text decoration
                     if (style.textDecoration === "underline") {
                         opts.underline = true;
                     } else if (style.textDecoration === "line-through") {
                         opts.strike = "sngStrike";
                     }
-
-                    // Background fill for text box
                     if (style.background) {
                         opts.fill = {
                             color: normalizeColor(style.background),
@@ -409,18 +362,12 @@ export async function generatePresentation(scene, outputFile = null) {
                             opts.rectRadius = toInchesX(textRadius);
                         }
                     }
-
-                    // Border
                     const lineProps = buildLineProps(style);
                     if (lineProps && !Array.isArray(lineProps)) opts.line = lineProps.line;
-
-                    // Shadow
                     if (style.boxShadow) {
                         const shadow = parseBoxShadow(style.boxShadow);
                         if (shadow) opts.shadow = shadow;
                     }
-
-                    // Opacity -> transparency
                     if (style.opacity !== undefined && style.opacity < 1) {
                         opts.transparency = Math.round(
                             (1 - style.opacity) * 100,
@@ -459,8 +406,6 @@ export async function generatePresentation(scene, outputFile = null) {
                             c.toUpperCase(),
                         );
                     }
-
-                    // Hyperlink
                     if (el.href) {
                         opts.hyperlink = { url: el.href };
                     }
@@ -483,10 +428,6 @@ export async function generatePresentation(scene, outputFile = null) {
                     drawPerSideBorders(slide, lineProps, basePos);
                     break;
                 }
-
-                // ==========================================
-                // IMAGE
-                // ==========================================
                 case "image": {
                     const opts = { ...basePos };
 
@@ -496,8 +437,6 @@ export async function generatePresentation(scene, outputFile = null) {
 
                     if (el.src?.startsWith("data:")) opts.data = el.src.replace(/^data:/i, "");
                     else opts.path = el.src;
-
-                    // Object-fit sizing
                     if (
                         style.objectFit === "cover" ||
                         style.objectFit === "contain"
@@ -528,8 +467,6 @@ export async function generatePresentation(scene, outputFile = null) {
                             }
                         }
                     }
-
-                    // Opacity -> transparency
                     if (style.opacity !== undefined && style.opacity < 1) {
                         opts.transparency = Math.round(
                             (1 - style.opacity) * 100,
