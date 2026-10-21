@@ -33,11 +33,12 @@ export async function searchImage(apiKey, keyword, orientation) {
     return suitablePhoto.src.original;
 }
 
-export async function searchImages(apiKey, keyword, orientation = "landscape", count = 5) {
+export async function searchImages(apiKey, keyword, orientation = "landscape", count = 5, page = 1) {
     const url = new URL(`${PEXELS_BASE}/search`);
     url.searchParams.set("query", keyword);
     url.searchParams.set("orientation", orientation);
-    url.searchParams.set("per_page", String(Math.min(Math.max(Number(count) || 5, 1), 8)));
+    url.searchParams.set("per_page", String(Math.min(Math.max(Number(count) || 5, 1), 80)));
+    url.searchParams.set("page", String(Math.max(Number(page) || 1, 1)));
     const response = await fetch(url.toString(), { headers: { Authorization: apiKey } });
     if (!response.ok) throw new Error(`Pexels API error: ${response.status}`);
     const data = await response.json();

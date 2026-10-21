@@ -19,8 +19,38 @@ import StorageMng from "../services/StorageMng.js";
 import designQueue from "../queues/design.queue.js";
 import slidesQueue from "../queues/slides.queue.js";
 import { captureSlideImage, exportPdf, exportPptx } from "../services/exporter.js";
+import { searchImages } from "../services/pexels.js";
 
 const router = Router();
+
+router.get("/pexels/search", async (req, res) => {
+  const query = typeof req.query.query === "string" ? req.query.query.trim() : "";
+  if (!query) return res.status(400).json({ error: "Search query is required." });
+  const page = Math.max(Number.parseInt(req.query.page, 10) || 1, 1);
+  const perPage = Math.min(Math.max(Number.parseInt(req.query.per_page, 10) || 30, 1), 80);
+  try {
+    const settings = getSettings();
+    if (!settings?.pexel_api) {
+      return res.status(422).json({ error: "Pexels API key is not configured in settings." });
+    }
+    const images = await searchImages(settings.pexel_api, query, "landscape", perPage, page);
+    return res.json({ photos: images.map((image) => ({
+      id: image.id,
+      alt: image.alt,
+      photographer: image.photographer,
+      src: { original: image.url, large: image.url, medium: image.thumbnail },
+    })) });
+  } catch (err) {
+    console.error("[GET /pexels/search]", err);
+    if (err.message === "Pexels API error: 401") {
+      return res.status(401).json({ error: "The Pexels API key configured in settings is invalid." });
+    }
+    if (err.message === "Pexels API error: 429") {
+      return res.status(429).json({ error: "Pexels rate limit exceeded. Please try again later." });
+    }
+    return res.status(502).json({ error: "Failed to search Pexels images." });
+  }
+});
 
 function parseStoredSlide(raw) {
     if (!raw) return null;

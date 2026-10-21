@@ -150,3 +150,8 @@ export function verifyPexelsKey(apiKey) {
     body: JSON.stringify({ apiKey }),
   });
 }
+
+export function searchPexelsImages(query, page = 1, perPage = 30) {
+  const params = new URLSearchParams({ query, page: String(page), per_page: String(perPage) });
+  return request(`/pexels/search?${params}`);
+}

@@ -9,9 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Search, Upload, ImageIcon, X, ArrowLeft } from 'lucide-react';
 import { GridPulse } from '@/components/GridLoadingScreen';
-
-const PEXELS_API_KEY = import.meta.env.VITE_PEXELS_API_KEY;
-const PEXELS_API_URL = 'https://api.pexels.com/v1/search';
+import { searchPexelsImages } from '@/lib/api';
 const RESULTS_PER_PAGE = 30;
 
 export default function ImagePickerDialog({ open, onOpenChange, onSelect }) {
@@ -99,24 +97,7 @@ export default function ImagePickerDialog({ open, onOpenChange, onSelect }) {
     setHasMoreResults(false);
     setPreviewPhoto(null);
     try {
-      const response = await fetch(
-        `${PEXELS_API_URL}?query=${encodeURIComponent(searchQuery.trim())}&per_page=${RESULTS_PER_PAGE}&page=1`,
-        {
-          headers: {
-            Authorization: PEXELS_API_KEY,
-          },
-        }
-      );
-      if (!response.ok) {
-        if (response.status === 429) {
-          throw new Error('Rate limit exceeded. Please try again later.');
-        }
-        if (response.status === 401) {
-          throw new Error('Invalid API key. Please check your .env configuration.');
-        }
-        throw new Error('Failed to fetch images from Pexels.');
-      }
-      const data = await response.json();
+      const data = await searchPexelsImages(searchQuery.trim(), 1, RESULTS_PER_PAGE);
       setSearchResults(data.photos || []);
       setHasMoreResults((data.photos || []).length === RESULTS_PER_PAGE);
     } catch (err) {
@@ -134,23 +115,7 @@ export default function ImagePickerDialog({ open, onOpenChange, onSelect }) {
     setSearchError(null);
 
     try {
-      const response = await fetch(
-        `${PEXELS_API_URL}?query=${encodeURIComponent(searchQuery.trim())}&per_page=${RESULTS_PER_PAGE}&page=${nextPage}`,
-        {
-          headers: {
-            Authorization: PEXELS_API_KEY,
-          },
-        }
-      );
-
-      if (!response.ok) {
-        if (response.status === 429) {
-          throw new Error('Rate limit exceeded. Please try again later.');
-        }
-        throw new Error('Failed to load more images from Pexels.');
-      }
-
-      const data = await response.json();
+      const data = await searchPexelsImages(searchQuery.trim(), nextPage, RESULTS_PER_PAGE);
       const nextPhotos = data.photos || [];
       setSearchResults((currentResults) => [...currentResults, ...nextPhotos]);
       setSearchPage(nextPage);

@@ -15,7 +15,7 @@ https://github.com/user-attachments/assets/adcd206a-02e0-45ea-82cd-5973b5f93768
 - Lets you update slides with the editor, revise the design, and search Pexels for images.
 - Exports the slides as PDF or an editable PPTX file.
 
-The design plan and slide generation use OpenRouter, so you can choose compatible models in Settings. Pexels supplies image search results. The app stores both API keys in its local SQLite settings database. Pexels offers its API without a fee under its API rules and default rate limits. OpenRouter model requests may incur provider charges depending on the model and account.
+The design plan and slide generation use OpenRouter. Choose models in Settings. Pexels supplies image search results. The server stores both API keys in its local SQLite settings database. OpenRouter charges depend on the selected model and provider.
 
 ## Run locally
 
@@ -31,7 +31,7 @@ Open the Vite URL printed in the terminal, normally `http://localhost:5173`. Add
 
 ## How PPTX export works
 
-The saved slides are HTML. Export does not put web pages inside a PowerPoint file. Playwright opens each slide in headless Chromium, the server reads element positions and computed styles from the rendered page, then PptxGenJS builds PowerPoint text, shapes, and images from that data.
+The app saves slides as HTML. For PPTX export, Playwright renders each slide in headless Chromium. The server reads element positions and computed styles, then PptxGenJS builds PowerPoint text, shapes, and images from that data.
 
 ```mermaid
 flowchart LR
