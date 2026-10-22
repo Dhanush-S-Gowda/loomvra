@@ -55,6 +55,7 @@ function Sidebar() {
   const [projectToRename, setProjectToRename] = useState(null);
   const [projectName, setProjectName] = useState('');
   const [renaming, setRenaming] = useState(false);
+  const [likeDialogOpen, setLikeDialogOpen] = useState(false);
 
   const fetchProjects = () => {
     getAllProjects(1, 50)
@@ -233,6 +234,27 @@ function Sidebar() {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={likeDialogOpen} onOpenChange={setLikeDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Enjoying loomvra?</DialogTitle>
+            <DialogDescription>
+              Give the project a star on GitHub to show your support.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setLikeDialogOpen(false)}>
+              Maybe later
+            </Button>
+            <Button asChild>
+              <a href="https://github.com/Dhanush-S-Gowda/loomvra" target="_blank" rel="noopener noreferrer">
+                Star on GitHub
+              </a>
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <SidebarFooter className="gap-2 p-3">
         <Separator className="bg-sidebar-border" />
         <Button
@@ -255,6 +277,7 @@ function Sidebar() {
           variant="ghost"
           className="w-full justify-start gap-2 rounded-lg hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
           size="sm"
+          onClick={() => setLikeDialogOpen(true)}
         >
           <Heart className="size-4 shrink-0" />
           <span className="group-data-[collapsible=icon]:hidden">Like this project?</span>
